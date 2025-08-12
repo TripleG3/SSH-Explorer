@@ -35,9 +35,7 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedRemoteItemChanged(SftpFile? value)
     {
-        // Treat selection as activation: open folders or show actions for files
-        if (value is null) return;
-        _ = NavigateRemoteAsync(value);
+        // No-op: navigation now handled by double-click gesture
     }
 
     [ObservableProperty]
@@ -45,8 +43,27 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedLocalItemChanged(FileSystemInfo? value)
     {
-        if (value is null) return;
-        NavigateLocal(value);
+        // No-op: navigation now handled by double-click gesture
+    }
+
+    [RelayCommand]
+    private async Task OpenRemoteFolderAsync(SftpFile item)
+    {
+        if (item is null || !item.IsDirectory) return;
+        var next = CombineUnix(RemotePath, item.Name);
+        await _ssh.ChangeDirectoryAsync(next);
+        RemotePath = next;
+        await RefreshRemoteAsync();
+    }
+
+    [RelayCommand]
+    private void OpenLocalFolder(FileSystemInfo fsi)
+    {
+        if (fsi is DirectoryInfo d)
+        {
+            LocalPath = d.FullName;
+            RefreshLocal();
+        }
     }
 
     private readonly IThemeService _theme;
@@ -78,6 +95,11 @@ public partial class MainViewModel : BaseViewModel
                     Profiles.Add(created);
                     SelectedProfile = created;
                 }
+            }
+            else if (SelectedProfile is null)
+            {
+                // Auto-select first profile so user can just click Connect
+                SelectedProfile = Profiles[0];
             }
         }
         finally { IsBusy = false; }

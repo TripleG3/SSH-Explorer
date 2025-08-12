@@ -42,6 +42,9 @@
                                 <Label Text="{Binding Name}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnRemoteDragStarting" />
+                                    <TapGestureRecognizer NumberOfTapsRequired="2"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenRemoteFolderCommand}"
+                                                         CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
                         </DataTemplate>
@@ -56,13 +59,16 @@
             <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,*">
                 <Label Grid.Row="0" Text="Local" FontAttributes="Bold"/>
                 <Entry Grid.Row="1" Text="{Binding LocalPath}"/>
-        <CollectionView Grid.Row="2" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}">
+    <CollectionView Grid.Row="2" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}">
                     <CollectionView.ItemTemplate>
             <DataTemplate x:DataType="io:FileSystemInfo">
                             <Grid Padding="6">
                                 <Label Text="{Binding Name}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnLocalDragStarting" />
+                    <TapGestureRecognizer NumberOfTapsRequired="2"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenLocalFolderCommand}"
+                             CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
                         </DataTemplate>
