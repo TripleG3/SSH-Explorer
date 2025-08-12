@@ -40,6 +40,19 @@ public sealed class SshService : ISshService
         }, ct);
     }
 
+    public Task DisconnectAsync()
+    {
+        return Task.Run(() =>
+        {
+            try { if (_ssh?.IsConnected == true) _ssh.Disconnect(); } catch { }
+            try { if (_sftp?.IsConnected == true) _sftp.Disconnect(); } catch { }
+            _ssh?.Dispose();
+            _sftp?.Dispose();
+            _ssh = null;
+            _sftp = null;
+        });
+    }
+
     public async Task<IEnumerable<SftpFile>> ListDirectoryAsync(string path, CancellationToken ct = default)
     {
         if (_sftp is null) throw new InvalidOperationException("Not connected");

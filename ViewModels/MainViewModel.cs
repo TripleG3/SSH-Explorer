@@ -26,9 +26,28 @@ public partial class MainViewModel : BaseViewModel
     [ObservableProperty] private string terminalOutput = string.Empty;
     [ObservableProperty] private string terminalInput = string.Empty;
     [ObservableProperty] private bool isTerminalVisible = true;
+    [ObservableProperty] private bool isTerminalPinned = false;
 
-    [ObservableProperty] private SftpFile? selectedRemoteItem;
-    [ObservableProperty] private FileSystemInfo? selectedLocalItem;
+    [ObservableProperty] private bool isConnected;
+
+    [ObservableProperty]
+    private SftpFile? selectedRemoteItem;
+
+    partial void OnSelectedRemoteItemChanged(SftpFile? value)
+    {
+        // Treat selection as activation: open folders or show actions for files
+        if (value is null) return;
+        _ = NavigateRemoteAsync(value);
+    }
+
+    [ObservableProperty]
+    private FileSystemInfo? selectedLocalItem;
+
+    partial void OnSelectedLocalItemChanged(FileSystemInfo? value)
+    {
+        if (value is null) return;
+        NavigateLocal(value);
+    }
 
     private readonly IThemeService _theme;
 
@@ -84,12 +103,31 @@ public partial class MainViewModel : BaseViewModel
             await RefreshRemoteAsync();
             RefreshLocal();
             AppendOutput($"Connected to {SelectedProfile.Host}\n");
+            IsConnected = _ssh.IsConnected;
         }
         catch (Exception ex)
         {
             AppendOutput($"Error: {ex.Message}\n");
         }
         finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task DisconnectAsync()
+    {
+        if (!_ssh.IsConnected) return;
+        var ok = await _dialogs.DisplayAlertAsync("Disconnect", "Disconnect from current SSH session?", "OK", "Cancel");
+        if (!ok) return;
+        try
+        {
+            await _ssh.DisconnectAsync();
+            IsConnected = _ssh.IsConnected;
+            AppendOutput("Disconnected\n");
+        }
+        catch (Exception ex)
+        {
+            AppendOutput($"Error: {ex.Message}\n");
+        }
     }
 
     private async Task<Profile?> CreateProfileInteractiveAsync()
@@ -104,14 +142,16 @@ public partial class MainViewModel : BaseViewModel
         var user = await _dialogs.DisplayPromptAsync("Create Profile", "Username:", "OK", "Cancel");
         if (string.IsNullOrWhiteSpace(user)) user = Environment.UserName;
 
-        var pass = await _dialogs.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):", "OK", "Cancel");
+    var portStr = await _dialogs.DisplayPromptAsync("Create Profile", "Port:", "OK", "Cancel", initialValue: "22");
+    var pass = await _dialogs.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):", "OK", "Cancel");
 
         var profile = new Profile
         {
             Name = name!,
             Host = host!,
             Username = user!,
-            Password = string.IsNullOrEmpty(pass) ? null : pass
+            Password = string.IsNullOrEmpty(pass) ? null : pass,
+            Port = int.TryParse(portStr, out var portVal) ? portVal : 22
         };
 
         await _profiles.AddOrUpdateAsync(profile);
@@ -158,6 +198,13 @@ public partial class MainViewModel : BaseViewModel
 
     [RelayCommand]
     private void ToggleTerminal() => IsTerminalVisible = !IsTerminalVisible;
+
+    [RelayCommand]
+    private void CollapseTerminalIfNotPinned()
+    {
+        if (!IsTerminalPinned)
+            IsTerminalVisible = false;
+    }
 
     [RelayCommand]
     private void ToggleTheme()

@@ -7,6 +7,7 @@ namespace SSHExplorer.Services;
 public interface ISshService : IAsyncDisposable
 {
     Task ConnectAsync(Profile profile, CancellationToken ct = default);
+    Task DisconnectAsync();
     bool IsConnected { get; }
     Task<IEnumerable<SftpFile>> ListDirectoryAsync(string path, CancellationToken ct = default);
     Task DownloadFileAsync(string remotePath, string localPath, IProgress<ulong>? progress = null, CancellationToken ct = default);
