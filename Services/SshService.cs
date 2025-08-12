@@ -28,7 +28,8 @@ public sealed class SshService : ISshService
             }
             else
             {
-                connInfo = new PasswordConnectionInfo(profile.Host, profile.Port, profile.Username, profile.Password);
+                // Use empty string if password is null to avoid ctor exceptions; server will still enforce auth
+                connInfo = new PasswordConnectionInfo(profile.Host, profile.Port, profile.Username, profile.Password ?? string.Empty);
             }
 
             _ssh = new SshClient(connInfo);

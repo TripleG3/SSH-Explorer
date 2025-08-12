@@ -52,15 +52,13 @@ public partial class MainViewModel : BaseViewModel
             foreach (var p in await _profiles.LoadAsync()) Profiles.Add(p);
             if (Profiles.Count == 0)
             {
-                // prompt for first profile
-                var name = await _dialogs.DisplayPromptAsync("Create Profile", "Enter a profile name:", "OK", "Cancel", "Default");
-                if (string.IsNullOrWhiteSpace(name)) name = "Default";
-                var host = await _dialogs.DisplayPromptAsync("Create Profile", "Host name or IP:");
-                var user = await _dialogs.DisplayPromptAsync("Create Profile", "Username:");
-                var pass = await _dialogs.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):");
-                var seed = new Profile { Name = name!, Host = host ?? string.Empty, Username = user ?? string.Empty, Password = pass };
-                await _profiles.AddOrUpdateAsync(seed);
-                Profiles.Add(seed);
+                // Prompt for first profile
+                var created = await CreateProfileInteractiveAsync();
+                if (created is not null)
+                {
+                    Profiles.Add(created);
+                    SelectedProfile = created;
+                }
             }
         }
         finally { IsBusy = false; }
@@ -69,7 +67,14 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private async Task ConnectAsync()
     {
-        if (SelectedProfile is null) return;
+        // If no profile selected, guide the user to create one
+        if (SelectedProfile is null)
+        {
+            var created = await CreateProfileInteractiveAsync();
+            if (created is null) return; // user cancelled
+            Profiles.Add(created);
+            SelectedProfile = created;
+        }
         if (IsBusy) return; IsBusy = true;
         try
         {
@@ -85,6 +90,32 @@ public partial class MainViewModel : BaseViewModel
             AppendOutput($"Error: {ex.Message}\n");
         }
         finally { IsBusy = false; }
+    }
+
+    private async Task<Profile?> CreateProfileInteractiveAsync()
+    {
+        // Gather minimal profile info via dialogs; return null if cancelled at the host stage
+        var name = await _dialogs.DisplayPromptAsync("Create Profile", "Enter a profile name:", "OK", "Cancel", "Default");
+        if (string.IsNullOrWhiteSpace(name)) name = "Default";
+
+        var host = await _dialogs.DisplayPromptAsync("Create Profile", "Host name or IP:", "OK", "Cancel");
+        if (string.IsNullOrWhiteSpace(host)) return null;
+
+        var user = await _dialogs.DisplayPromptAsync("Create Profile", "Username:", "OK", "Cancel");
+        if (string.IsNullOrWhiteSpace(user)) user = Environment.UserName;
+
+        var pass = await _dialogs.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):", "OK", "Cancel");
+
+        var profile = new Profile
+        {
+            Name = name!,
+            Host = host!,
+            Username = user!,
+            Password = string.IsNullOrEmpty(pass) ? null : pass
+        };
+
+        await _profiles.AddOrUpdateAsync(profile);
+        return profile;
     }
 
     [RelayCommand]
