@@ -4,6 +4,8 @@ using Renci.SshNet.Sftp;
 using SSHExplorer.Models;
 using SSHExplorer.Services;
 using System.Collections.ObjectModel;
+using Microsoft.Maui.Storage;
+using SSHExplorer.Utilities;
 
 namespace SSHExplorer.ViewModels;
 
@@ -27,6 +29,8 @@ public partial class MainViewModel : BaseViewModel
     [ObservableProperty] private string terminalInput = string.Empty;
     [ObservableProperty] private bool isTerminalVisible = true;
     [ObservableProperty] private bool isTerminalPinned = false;
+    [ObservableProperty] private double terminalHeight = 220; // pixels
+    [ObservableProperty] private double paneSplitRatio = 0.5; // 0..1 (left/remote width ratio)
 
     [ObservableProperty] private bool isConnected;
 
@@ -50,7 +54,7 @@ public partial class MainViewModel : BaseViewModel
     private async Task OpenRemoteFolderAsync(SftpFile item)
     {
         if (item is null || !item.IsDirectory) return;
-        var next = CombineUnix(RemotePath, item.Name);
+    var next = PathHelpers.CombineUnix(RemotePath, item.Name);
         await _ssh.ChangeDirectoryAsync(next);
         RemotePath = next;
         await RefreshRemoteAsync();
@@ -86,6 +90,8 @@ public partial class MainViewModel : BaseViewModel
 
             Profiles.Clear();
             foreach (var p in await _profiles.LoadAsync()) Profiles.Add(p);
+            // Try restore last used profile
+            var lastProfileName = Preferences.Get(PrefKeys.LastProfileName, string.Empty);
             if (Profiles.Count == 0)
             {
                 // Prompt for first profile
@@ -98,9 +104,16 @@ public partial class MainViewModel : BaseViewModel
             }
             else if (SelectedProfile is null)
             {
-                // Auto-select first profile so user can just click Connect
-                SelectedProfile = Profiles[0];
+                // Restore last used profile if available
+                SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Name, lastProfileName, StringComparison.OrdinalIgnoreCase))
+                                   ?? Profiles[0];
             }
+
+            // Restore UI state
+            IsTerminalVisible = Preferences.Get(PrefKeys.IsTerminalVisible, IsTerminalVisible);
+            IsTerminalPinned = Preferences.Get(PrefKeys.IsTerminalPinned, IsTerminalPinned);
+            TerminalHeight = Preferences.Get(PrefKeys.TerminalHeight, TerminalHeight);
+            PaneSplitRatio = Math.Clamp(Preferences.Get(PrefKeys.PaneSplitRatio, PaneSplitRatio), 0.1, 0.9);
         }
         finally { IsBusy = false; }
     }
@@ -126,6 +139,7 @@ public partial class MainViewModel : BaseViewModel
             RefreshLocal();
             AppendOutput($"Connected to {SelectedProfile.Host}\n");
             IsConnected = _ssh.IsConnected;
+            Preferences.Set(PrefKeys.LastProfileName, SelectedProfile.Name);
         }
         catch (Exception ex)
         {
@@ -237,11 +251,14 @@ public partial class MainViewModel : BaseViewModel
     }
 
     [RelayCommand]
+    private void TogglePin() => IsTerminalPinned = !IsTerminalPinned;
+
+    [RelayCommand]
     private async Task NavigateRemoteAsync(SftpFile item)
     {
         if (item.IsDirectory)
         {
-            var next = CombineUnix(RemotePath, item.Name);
+            var next = PathHelpers.CombineUnix(RemotePath, item.Name);
             await _ssh.ChangeDirectoryAsync(next);
             RemotePath = next;
             await RefreshRemoteAsync();
@@ -308,7 +325,7 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private async Task GoBackRemoteAsync()
     {
-        var parent = ParentUnix(RemotePath);
+    var parent = PathHelpers.ParentUnix(RemotePath);
         if (parent != RemotePath)
         {
             await _ssh.ChangeDirectoryAsync(parent);
@@ -328,9 +345,9 @@ public partial class MainViewModel : BaseViewModel
     private async Task DownloadSelectedAsync()
     {
         var item = SelectedRemoteItem; if (item is null || item.IsDirectory) return;
-        var dest = Path.Combine(LocalPath, item.Name);
+    var dest = Path.Combine(LocalPath, item.Name);
         IsBusy = true;
-        try { await _ssh.DownloadFileAsync(CombineUnix(RemotePath, item.Name), dest); AppendOutput($"Downloaded {item.Name}\n"); RefreshLocal(); }
+    try { await _ssh.DownloadFileAsync(PathHelpers.CombineUnix(RemotePath, item.Name), dest); AppendOutput($"Downloaded {item.Name}\n"); RefreshLocal(); }
         catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); }
         finally { IsBusy = false; }
     }
@@ -339,7 +356,7 @@ public partial class MainViewModel : BaseViewModel
     private async Task UploadSelectedAsync()
     {
         var item = SelectedLocalItem as FileInfo; if (item is null) return;
-        var dest = CombineUnix(RemotePath, item.Name);
+    var dest = PathHelpers.CombineUnix(RemotePath, item.Name);
         IsBusy = true;
         try { await _ssh.UploadFileAsync(item.FullName, dest); AppendOutput($"Uploaded {item.Name}\n"); await RefreshRemoteAsync(); }
         catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); }
@@ -350,7 +367,7 @@ public partial class MainViewModel : BaseViewModel
     {
     var ok = await _dialogs.DisplayAlertAsync("Execute", $"Execute {file.Name}?", "OK", "Cancel");
         if (!ok) return;
-        await ExecuteCommandWithConfirm($"chmod +x '{CombineUnix(RemotePath, file.Name)}' && '{CombineUnix(RemotePath, file.Name)}'");
+    await ExecuteCommandWithConfirm($"chmod +x '{PathHelpers.CombineUnix(RemotePath, file.Name)}' && '{PathHelpers.CombineUnix(RemotePath, file.Name)}'");
     }
 
     private async Task DownloadRemoteFile(SftpFile file)
@@ -363,7 +380,7 @@ public partial class MainViewModel : BaseViewModel
         if (!_ssh.IsConnected) return;
     var ok = await _dialogs.DisplayAlertAsync("Delete", $"Delete {file.Name}?", "OK", "Cancel");
         if (!ok) return;
-        try { await _ssh.ExecuteCommandAsync($"rm -f '{CombineUnix(RemotePath, file.Name)}'"); await RefreshRemoteAsync(); }
+    try { await _ssh.ExecuteCommandAsync($"rm -f '{PathHelpers.CombineUnix(RemotePath, file.Name)}'"); await RefreshRemoteAsync(); }
         catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
     }
 
@@ -371,7 +388,7 @@ public partial class MainViewModel : BaseViewModel
     {
     var n = await _dialogs.DisplayPromptAsync("Rename", "New name:", initialValue: file.Name);
         if (string.IsNullOrWhiteSpace(n) || n == file.Name) return;
-        try { await _ssh.ExecuteCommandAsync($"mv '{CombineUnix(RemotePath, file.Name)}' '{CombineUnix(RemotePath, n)}'"); await RefreshRemoteAsync(); }
+    try { await _ssh.ExecuteCommandAsync($"mv '{PathHelpers.CombineUnix(RemotePath, file.Name)}' '{PathHelpers.CombineUnix(RemotePath, n)}'"); await RefreshRemoteAsync(); }
         catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); }
     }
 
@@ -388,19 +405,208 @@ public partial class MainViewModel : BaseViewModel
         AppendOutput(result + "\n");
     }
 
-    private void AppendOutput(string text) => TerminalOutput += text;
-
-    private static string CombineUnix(string a, string b)
+    [RelayCommand]
+    private async Task ShowRemoteActionsAsync(SftpFile item)
     {
-        if (string.IsNullOrEmpty(a)) return b;
-        if (a.EndsWith('/')) return a + b;
-        return a + "/" + b;
+        if (item is null) return;
+        var isDir = item.IsDirectory;
+        var list = isDir
+            ? new[] { "Open", "Copy", "Move", "Delete", "Rename" }
+            : new[] { "Execute", "Download", "Copy", "Move", "Delete", "Rename" };
+        var choice = await _dialogs.DisplayActionSheetAsync(item.Name, "Close", null, list);
+        switch (choice)
+        {
+            case "Open" when isDir:
+                await OpenRemoteFolderAsync(item);
+                break;
+            case "Execute" when !isDir:
+                await ExecuteRemoteFile(item);
+                break;
+            case "Download" when !isDir:
+                await DownloadRemoteFile(item);
+                break;
+            case "Delete":
+                await ConfirmAndDeleteRemoteAsync(item);
+                break;
+            case "Rename":
+                await RenameRemoteFile(item);
+                break;
+            case "Copy":
+                await CopyRemoteAsync(item);
+                break;
+            case "Move":
+                await MoveRemoteAsync(item);
+                break;
+        }
     }
 
-    private static string ParentUnix(string path)
+    [RelayCommand]
+    private async Task ShowLocalActionsAsync(FileSystemInfo fsi)
     {
-        if (string.IsNullOrEmpty(path) || path == "/") return "/";
-        var idx = path.TrimEnd('/').LastIndexOf('/');
-        return idx <= 0 ? "/" : path[..idx];
+        if (fsi is null) return;
+        var list = new[] { "Open", "Copy", "Move", "Delete", "Rename", "Upload" };
+        var choice = await _dialogs.DisplayActionSheetAsync(fsi.Name, "Close", null, list);
+        switch (choice)
+        {
+            case "Open":
+                if (fsi is DirectoryInfo d) { LocalPath = d.FullName; RefreshLocal(); }
+                break;
+            case "Upload":
+                if (fsi is FileInfo fi) await UploadLocalFile(fi);
+                break;
+            case "Delete":
+                await ConfirmAndDeleteLocalAsync(fsi);
+                break;
+            case "Rename":
+                await RenameLocalAsync(fsi);
+                break;
+            case "Copy":
+                await CopyLocalAsync(fsi);
+                break;
+            case "Move":
+                await MoveLocalAsync(fsi);
+                break;
+        }
+    }
+
+    private async Task ConfirmAndDeleteRemoteAsync(SftpFile item)
+    {
+        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"Delete {(item.IsDirectory ? "folder" : "file")} {item.Name}?", "OK", "Cancel");
+        if (!ok) return;
+    var path = PathHelpers.CombineUnix(RemotePath, item.Name);
+        var cmd = item.IsDirectory ? $"rm -rf '{path}'" : $"rm -f '{path}'";
+        try { await _ssh.ExecuteCommandAsync(cmd); await RefreshRemoteAsync(); }
+        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
+    }
+
+    private async Task CopyRemoteAsync(SftpFile item)
+    {
+    var src = PathHelpers.CombineUnix(RemotePath, item.Name);
+        var dest = await _dialogs.DisplayPromptAsync("Copy", "Destination path:", "OK", "Cancel", initialValue: src);
+        if (string.IsNullOrWhiteSpace(dest)) return;
+        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"cp -r '{src}' '{dest}'?", "OK", "Cancel");
+        if (!ok) return;
+        try { await _ssh.ExecuteCommandAsync($"cp -r '{src}' '{dest}'"); await RefreshRemoteAsync(); }
+        catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); }
+    }
+
+    private async Task MoveRemoteAsync(SftpFile item)
+    {
+    var src = PathHelpers.CombineUnix(RemotePath, item.Name);
+        var dest = await _dialogs.DisplayPromptAsync("Move", "Destination path:", "OK", "Cancel", initialValue: src);
+        if (string.IsNullOrWhiteSpace(dest) || dest == src) return;
+        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"mv '{src}' '{dest}'?", "OK", "Cancel");
+        if (!ok) return;
+        try { await _ssh.ExecuteCommandAsync($"mv '{src}' '{dest}'"); await RefreshRemoteAsync(); }
+        catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); }
+    }
+
+    private async Task ConfirmAndDeleteLocalAsync(FileSystemInfo fsi)
+    {
+        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"Delete {(fsi is DirectoryInfo ? "folder" : "file")} {fsi.Name}?", "OK", "Cancel");
+        if (!ok) return;
+        try
+        {
+            if (fsi is DirectoryInfo dd) dd.Delete(true); else File.Delete(fsi.FullName);
+            RefreshLocal();
+        }
+        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
+    }
+
+    private async Task RenameLocalAsync(FileSystemInfo fsi)
+    {
+        var n = await _dialogs.DisplayPromptAsync("Rename", "New name:", initialValue: fsi.Name);
+        if (string.IsNullOrWhiteSpace(n) || n == fsi.Name) return;
+        try
+        {
+            var target = Path.Combine(Path.GetDirectoryName(fsi.FullName)!, n);
+            if (fsi is DirectoryInfo)
+                Directory.Move(fsi.FullName, target);
+            else
+                File.Move(fsi.FullName, target, true);
+            RefreshLocal();
+        }
+        catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); }
+    }
+
+    private async Task CopyLocalAsync(FileSystemInfo fsi)
+    {
+        var dest = await _dialogs.DisplayPromptAsync("Copy", "Destination path:", "OK", "Cancel", initialValue: fsi.FullName);
+        if (string.IsNullOrWhiteSpace(dest) || dest == fsi.FullName) return;
+        try
+        {
+            if (fsi is DirectoryInfo dd) CopyDirectoryRecursive(dd.FullName, dest);
+            else File.Copy(fsi.FullName, dest, true);
+            RefreshLocal();
+        }
+        catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); }
+    }
+
+    private async Task MoveLocalAsync(FileSystemInfo fsi)
+    {
+        var dest = await _dialogs.DisplayPromptAsync("Move", "Destination path:", "OK", "Cancel", initialValue: fsi.FullName);
+        if (string.IsNullOrWhiteSpace(dest) || dest == fsi.FullName) return;
+        try
+        {
+            if (fsi is DirectoryInfo)
+                Directory.Move(fsi.FullName, dest);
+            else
+                File.Move(fsi.FullName, dest, true);
+            RefreshLocal();
+        }
+        catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); }
+    }
+
+    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+    {
+        var src = new DirectoryInfo(sourceDir);
+        if (!src.Exists) return;
+        Directory.CreateDirectory(destDir);
+        foreach (var file in src.GetFiles())
+        {
+            var target = Path.Combine(destDir, file.Name);
+            file.CopyTo(target, true);
+        }
+        foreach (var dir in src.GetDirectories())
+        {
+            CopyDirectoryRecursive(dir.FullName, Path.Combine(destDir, dir.Name));
+        }
+    }
+
+    private void AppendOutput(string text) => TerminalOutput += text;
+
+    partial void OnSelectedProfileChanged(Profile? value)
+    {
+        if (value is not null)
+            Preferences.Set(PrefKeys.LastProfileName, value.Name);
+    }
+
+    partial void OnIsTerminalVisibleChanged(bool value)
+    {
+        Preferences.Set(PrefKeys.IsTerminalVisible, value);
+    }
+
+    partial void OnIsTerminalPinnedChanged(bool value)
+    {
+        Preferences.Set(PrefKeys.IsTerminalPinned, value);
+    }
+
+    partial void OnTerminalHeightChanged(double value)
+    {
+        Preferences.Set(PrefKeys.TerminalHeight, value);
+    }
+
+    partial void OnPaneSplitRatioChanged(double value)
+    {
+        Preferences.Set(PrefKeys.PaneSplitRatio, Math.Clamp(value, 0.1, 0.9));
+    }
+
+    private static class PrefKeys
+    {
+        public const string LastProfileName = "LastProfileName";
+        public const string IsTerminalVisible = "IsTerminalVisible";
+        public const string IsTerminalPinned = "IsTerminalPinned";
+        public const string TerminalHeight = "TerminalHeight";
+        public const string PaneSplitRatio = "PaneSplitRatio";
     }
 }

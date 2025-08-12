@@ -9,6 +9,7 @@ public partial class MainPage : ContentPage
 		InitializeComponent();
 		BindingContext = vm;
 		Appearing += async (_, _) => await vm.LoadCommand.ExecuteAsync(null);
+		this.Loaded += OnLoaded;
 	}
 
 	private async void OnCommandsClicked(object? sender, EventArgs e)
@@ -62,5 +63,78 @@ public partial class MainPage : ContentPage
 				await vm.UploadSelectedCommand.ExecuteAsync(null);
 			}
 		}
+	}
+
+	private void OnLoaded(object? sender, EventArgs e)
+	{
+		if (BindingContext is MainViewModel vm)
+		{
+			// Apply initial pane ratio
+			ApplyPaneWidths(vm.PaneSplitRatio);
+			// Apply terminal height
+			TerminalContainer.HeightRequest = vm.TerminalHeight;
+		}
+
+	// Keyboard shortcut skipped due to cross-platform limitations; consider platform effect later.
+	}
+
+	// Splitter drag between panes
+	private void OnPaneSplitterPanUpdated(object? sender, PanUpdatedEventArgs e)
+	{
+		if (BindingContext is not MainViewModel vm) return;
+		if (e.StatusType == GestureStatus.Running && ExplorerGrid.Width > 0)
+		{
+			var ratio = vm.PaneSplitRatio + (e.TotalX / ExplorerGrid.Width);
+			ratio = Math.Max(0.1, Math.Min(0.9, ratio));
+			vm.PaneSplitRatio = ratio;
+			ApplyPaneWidths(ratio);
+		}
+	}
+
+	// Terminal resize by dragging the handle
+	private void OnTerminalHandlePanUpdated(object? sender, PanUpdatedEventArgs e)
+	{
+		if (BindingContext is not MainViewModel vm) return;
+		if (e.StatusType == GestureStatus.Running)
+		{
+			var newHeight = Math.Max(120, Math.Min(600, vm.TerminalHeight + (-e.TotalY)));
+			vm.TerminalHeight = newHeight;
+			TerminalContainer.HeightRequest = newHeight;
+		}
+	}
+
+	private void ApplyPaneWidths(double ratio)
+	{
+		ExplorerGrid.ColumnDefinitions[0].Width = new GridLength(ratio, GridUnitType.Star);
+		ExplorerGrid.ColumnDefinitions[2].Width = new GridLength(1 - ratio, GridUnitType.Star);
+	}
+
+	protected override void OnHandlerChanged()
+	{
+		base.OnHandlerChanged();
+#if WINDOWS
+		try
+		{
+			var page = this.Handler?.PlatformView as Microsoft.UI.Xaml.Controls.Page;
+			if (page is null) return;
+			// Add Ctrl+` accelerator if not already present
+	    bool exists = page.KeyboardAccelerators.Any(k => k.Key == Windows.System.VirtualKey.T);
+			if (!exists)
+			{
+				var accel = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+				{
+		    Key = Windows.System.VirtualKey.T,
+		    Modifiers = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift
+				};
+				accel.Invoked += (s, e) =>
+				{
+					(BindingContext as MainViewModel)?.ToggleTerminalCommand.Execute(null);
+					e.Handled = true;
+				};
+				page.KeyboardAccelerators.Add(accel);
+			}
+		}
+		catch { }
+#endif
 	}
 }

@@ -19,31 +19,35 @@
             Command="{Binding DisconnectCommand}"/>
             <Button Text="⟲ Remote" Command="{Binding RefreshRemoteCommand}"/>
             <Button Text="⟲ Local" Command="{Binding RefreshLocalCommand}"/>
-            <Button Text="◀ Remote" Command="{Binding GoBackRemoteCommand}"/>
-            <Button Text="◀ Local" Command="{Binding GoBackLocalCommand}"/>
             <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
             <Button Text="Theme" Command="{Binding ToggleThemeCommand}"/>
             <Button Text="Commands" Clicked="OnCommandsClicked"/>
         </HorizontalStackLayout>
 
         <!-- Dual Pane Explorer -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,*">
-            <Grid.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding CollapseTerminalIfNotPinnedCommand}"/>
-            </Grid.GestureRecognizers>
+    <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,Auto,*">
             <!-- Remote Pane -->
-            <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Remote" FontAttributes="Bold"/>
-                <Entry Grid.Row="1" Text="{Binding RemotePath}"/>
-                <CollectionView Grid.Row="2" ItemsSource="{Binding RemoteItems}" SelectedItem="{Binding SelectedRemoteItem}">
+                <HorizontalStackLayout Grid.Row="1" Spacing="8">
+                    <Button Text="◀ Back" Command="{Binding GoBackRemoteCommand}"/>
+                </HorizontalStackLayout>
+                <Entry Grid.Row="2" Text="{Binding RemotePath}"/>
+                <CollectionView Grid.Row="3" ItemsSource="{Binding RemoteItems}" SelectedItem="{Binding SelectedRemoteItem}" SelectionMode="None">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="sftp:SftpFile">
-                            <Grid Padding="6">
+                            <Grid Padding="6" InputTransparent="False">
                                 <Label Text="{Binding Name}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnRemoteDragStarting" />
                                     <TapGestureRecognizer NumberOfTapsRequired="2"
                                                          Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenRemoteFolderCommand}"
+                                                         CommandParameter="{Binding .}" />
+                                    <TapGestureRecognizer NumberOfTapsRequired="1"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowRemoteActionsCommand}"
+                                                         CommandParameter="{Binding .}" />
+                                    <TapGestureRecognizer Buttons="Secondary"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowRemoteActionsCommand}"
                                                          CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
@@ -55,19 +59,36 @@
                 </Grid.GestureRecognizers>
             </Grid>
 
+            <!-- Splitter -->
+            <Grid Grid.Column="1" WidthRequest="8" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
+                    <PanGestureRecognizer PanUpdated="OnPaneSplitterPanUpdated" />
+                </Grid.GestureRecognizers>
+                <Border HeightRequest="40" WidthRequest="4" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="#606060" StrokeThickness="0" StrokeShape="RoundRectangle 2,2,2,2" />
+            </Grid>
+
             <!-- Local Pane -->
-            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Local" FontAttributes="Bold"/>
-                <Entry Grid.Row="1" Text="{Binding LocalPath}"/>
-    <CollectionView Grid.Row="2" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}">
+                <HorizontalStackLayout Grid.Row="1" Spacing="8">
+                    <Button Text="◀ Back" Command="{Binding GoBackLocalCommand}"/>
+                </HorizontalStackLayout>
+                <Entry Grid.Row="2" Text="{Binding LocalPath}"/>
+                <CollectionView Grid.Row="3" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}" SelectionMode="None">
                     <CollectionView.ItemTemplate>
             <DataTemplate x:DataType="io:FileSystemInfo">
-                            <Grid Padding="6">
+                            <Grid Padding="6" InputTransparent="False">
                                 <Label Text="{Binding Name}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnLocalDragStarting" />
                     <TapGestureRecognizer NumberOfTapsRequired="2"
                              Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenLocalFolderCommand}"
+                             CommandParameter="{Binding .}" />
+                    <TapGestureRecognizer NumberOfTapsRequired="1"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowLocalActionsCommand}"
+                             CommandParameter="{Binding .}" />
+                    <TapGestureRecognizer Buttons="Secondary"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowLocalActionsCommand}"
                              CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
@@ -81,12 +102,20 @@
         </Grid>
 
         <!-- Docked Terminal -->
-    <Grid Grid.Row="2" RowDefinitions="Auto,* ,Auto" BackgroundColor="{AppThemeBinding Light=#111111, Dark=#000000}" IsVisible="{Binding IsTerminalVisible}">
+    <Grid x:Name="TerminalContainer" Grid.Row="2" RowDefinitions="Auto,* ,Auto" BackgroundColor="{AppThemeBinding Light=#111111, Dark=#000000}" IsVisible="{Binding IsTerminalVisible}" HeightRequest="{Binding TerminalHeight}">
             <!-- Header with pin toggle -->
             <HorizontalStackLayout Padding="6" Spacing="10">
                 <Label Text="Terminal" TextColor="White" FontAttributes="Bold"/>
-                <CheckBox IsChecked="{Binding IsTerminalPinned}"/>
-                <Label Text="Pinned" TextColor="White"/>
+                <Button Command="{Binding TogglePinCommand}">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="True">
+                            <Setter Property="Text" Value="📌 Unpin" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="False">
+                            <Setter Property="Text" Value="📍 Pin" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
             </HorizontalStackLayout>
             <ScrollView Grid.Row="1">
                 <Label Text="{Binding TerminalOutput}" TextColor="White" LineBreakMode="WordWrap"/>
@@ -97,6 +126,21 @@
                 <Button Grid.Column="2" Text="⬇" Command="{Binding DownloadSelectedCommand}"/>
                 <Button Grid.Column="3" Text="⬆" Command="{Binding UploadSelectedCommand}"/>
             </Grid>
+    </Grid>
+    <!-- Hover/touch handle to bring terminal up -->
+    <Grid Grid.Row="2" HeightRequest="12" BackgroundColor="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Border StrokeThickness="0" BackgroundColor="#3A3A3A" HeightRequest="6" WidthRequest="140" HorizontalOptions="Center" VerticalOptions="Center" StrokeShape="RoundRectangle 3,3,3,3">
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleTerminalCommand}"/>
+                <PanGestureRecognizer PanUpdated="OnTerminalHandlePanUpdated" />
+            </Border.GestureRecognizers>
+        </Border>
+        <Grid.GestureRecognizers>
+            <TapGestureRecognizer Command="{Binding ToggleTerminalCommand}"/>
+        </Grid.GestureRecognizers>
     </Grid>
     </Grid>
 </ContentPage>

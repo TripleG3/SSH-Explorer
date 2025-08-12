@@ -213,6 +213,23 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Rebuild after actions/hover/pin changes",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"-t:Build",
+				"-p:Configuration=Debug",
+				"-f",
+				"net9.0-windows10.0.19041.0",
+				"-p",
+				"WindowsPackageType=None",
+				"c:\\Repos\\TripleG3\\SSH-UI\\SSH-Explorer\\SSHExplorer.csproj"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }
