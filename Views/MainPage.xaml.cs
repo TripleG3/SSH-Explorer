@@ -1,9 +1,16 @@
 using SSHExplorer.ViewModels;
+using Microsoft.Maui.ApplicationModel;
+using System.ComponentModel;
+using System.Linq;
+using System.IO;
 
 namespace SSHExplorer.Views;
 
 public partial class MainPage : ContentPage
 {
+	private string? _pinnedIconPath;
+	private string? _unpinnedIconPath;
+
 	public MainPage(MainViewModel vm)
 	{
 		InitializeComponent();
@@ -69,26 +76,38 @@ public partial class MainPage : ContentPage
 	{
 		if (BindingContext is MainViewModel vm)
 		{
-			// Apply initial pane ratio
-			ApplyPaneWidths(vm.PaneSplitRatio);
 			// Apply terminal height
 			TerminalContainer.HeightRequest = vm.TerminalHeight;
+
+			// Load icons and background from external folder
+			try
+			{
+				var baseDir = @"C:\\Users\\micha\\OneDrive\\Pictures\\From Cory\\Logo";
+				if (Directory.Exists(baseDir))
+				{
+					// Background image
+					var bg = Directory.EnumerateFiles(baseDir, "*.png", SearchOption.AllDirectories)
+									  .Concat(Directory.EnumerateFiles(baseDir, "*.jpg", SearchOption.AllDirectories))
+									  .FirstOrDefault();
+					if (!string.IsNullOrEmpty(bg))
+						this.BackgroundImageSource = ImageSource.FromFile(bg);
+
+					// Pin icons
+					_pinnedIconPath = Directory.EnumerateFiles(baseDir, "*pin*.*", SearchOption.AllDirectories)
+											   .FirstOrDefault(f => f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase));
+					_unpinnedIconPath = Directory.EnumerateFiles(baseDir, "*unpin*.*", SearchOption.AllDirectories)
+												 .FirstOrDefault(f => f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+										  ?? _pinnedIconPath;
+					UpdatePinIcon(vm.IsTerminalPinned);
+
+					// React to pin state changes
+					vm.PropertyChanged += OnVmPropertyChanged;
+				}
+			}
+			catch { }
 		}
 
 	// Keyboard shortcut skipped due to cross-platform limitations; consider platform effect later.
-	}
-
-	// Splitter drag between panes
-	private void OnPaneSplitterPanUpdated(object? sender, PanUpdatedEventArgs e)
-	{
-		if (BindingContext is not MainViewModel vm) return;
-		if (e.StatusType == GestureStatus.Running && ExplorerGrid.Width > 0)
-		{
-			var ratio = vm.PaneSplitRatio + (e.TotalX / ExplorerGrid.Width);
-			ratio = Math.Max(0.1, Math.Min(0.9, ratio));
-			vm.PaneSplitRatio = ratio;
-			ApplyPaneWidths(ratio);
-		}
 	}
 
 	// Terminal resize by dragging the handle
@@ -101,12 +120,6 @@ public partial class MainPage : ContentPage
 			vm.TerminalHeight = newHeight;
 			TerminalContainer.HeightRequest = newHeight;
 		}
-	}
-
-	private void ApplyPaneWidths(double ratio)
-	{
-		ExplorerGrid.ColumnDefinitions[0].Width = new GridLength(ratio, GridUnitType.Star);
-		ExplorerGrid.ColumnDefinitions[2].Width = new GridLength(1 - ratio, GridUnitType.Star);
 	}
 
 	protected override void OnHandlerChanged()
@@ -136,5 +149,32 @@ public partial class MainPage : ContentPage
 		}
 		catch { }
 #endif
+	}
+
+	private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (sender is not MainViewModel vm) return;
+		if (e.PropertyName == nameof(vm.IsTerminalPinned))
+		{
+			UpdatePinIcon(vm.IsTerminalPinned);
+		}
+	}
+
+	private void UpdatePinIcon(bool pinned)
+	{
+		try
+		{
+			var path = pinned ? _pinnedIconPath : _unpinnedIconPath;
+			if (!string.IsNullOrEmpty(path))
+				PinButton.Source = ImageSource.FromFile(path);
+		}
+		catch { }
+	}
+
+	private async void OnAboutClicked(object? sender, EventArgs e)
+	{
+		var company = "Triple G3";
+		var version = AppInfo.Current?.VersionString ?? "Unknown";
+		await DisplayAlert("About", $"Company: {company}\nVersion: {version}", "OK");
 	}
 }

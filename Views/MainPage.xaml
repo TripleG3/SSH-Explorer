@@ -17,13 +17,14 @@
         <Button Text="● Connected" TextColor="Lime" BackgroundColor="Transparent" BorderColor="Lime" BorderWidth="1"
             IsVisible="{Binding IsConnected}"
             Command="{Binding DisconnectCommand}"/>
-            <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
+        <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
             <Button Text="Theme" Command="{Binding ToggleThemeCommand}"/>
             <Button Text="Commands" Clicked="OnCommandsClicked"/>
+        <Button Text="About" Clicked="OnAboutClicked"/>
         </HorizontalStackLayout>
 
         <!-- Dual Pane Explorer -->
-    <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,Auto,*">
+    <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,*">
             <!-- Remote Pane -->
         <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Remote" FontAttributes="Bold"/>
@@ -58,16 +59,8 @@
                 </Grid.GestureRecognizers>
             </Grid>
 
-            <!-- Splitter -->
-            <Grid Grid.Column="1" WidthRequest="8" BackgroundColor="Transparent">
-                <Grid.GestureRecognizers>
-                    <PanGestureRecognizer PanUpdated="OnPaneSplitterPanUpdated" />
-                </Grid.GestureRecognizers>
-                <Border HeightRequest="40" WidthRequest="4" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="#606060" StrokeThickness="0" StrokeShape="RoundRectangle 2,2,2,2" />
-            </Grid>
-
             <!-- Local Pane -->
-        <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
+            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Local" FontAttributes="Bold"/>
                 <HorizontalStackLayout Grid.Row="1" Spacing="8">
             <Button Text="◀" Command="{Binding GoBackLocalCommand}"/>
@@ -106,16 +99,7 @@
             <!-- Header with pin toggle -->
             <HorizontalStackLayout Padding="6" Spacing="10">
                 <Label Text="Terminal" TextColor="White" FontAttributes="Bold"/>
-                <Button Command="{Binding TogglePinCommand}">
-                    <Button.Triggers>
-                        <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="True">
-                            <Setter Property="Text" Value="📌" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="False">
-                            <Setter Property="Text" Value="�" />
-                        </DataTrigger>
-                    </Button.Triggers>
-                </Button>
+                <ImageButton x:Name="PinButton" WidthRequest="32" HeightRequest="32" BackgroundColor="Transparent" Command="{Binding TogglePinCommand}"/>
             </HorizontalStackLayout>
             <ScrollView Grid.Row="1">
                 <Label Text="{Binding TerminalOutput}" TextColor="White" LineBreakMode="WordWrap"/>

@@ -6,14 +6,24 @@ public sealed class ThemeService : IThemeService
 {
     public void ApplyLightTheme(Color primary)
     {
-        Application.Current!.Resources["PrimaryColor"] = primary;
-        Application.Current!.UserAppTheme = AppTheme.Light;
+    var (primaryDark, secondary, secondaryDarkText) = ComputeVariants(primary, isDark:false);
+    var res = Application.Current!.Resources;
+    res["Primary"] = primary;
+    res["PrimaryDark"] = primaryDark;
+    res["Secondary"] = secondary;
+    res["SecondaryDarkText"] = secondaryDarkText;
+    Application.Current!.UserAppTheme = AppTheme.Light;
     }
 
     public void ApplyDarkTheme(Color primary)
     {
-        Application.Current!.Resources["PrimaryColor"] = primary;
-        Application.Current!.UserAppTheme = AppTheme.Dark;
+    var (primaryDark, secondary, secondaryDarkText) = ComputeVariants(primary, isDark:true);
+    var res = Application.Current!.Resources;
+    res["Primary"] = primary;
+    res["PrimaryDark"] = primaryDark;
+    res["Secondary"] = secondary;
+    res["SecondaryDarkText"] = secondaryDarkText;
+    Application.Current!.UserAppTheme = AppTheme.Dark;
     }
 
     public Color ComputePrimaryFromFolder(string folder)
@@ -43,4 +53,25 @@ public sealed class ThemeService : IThemeService
         }
         catch { return Colors.CornflowerBlue; }
     }
+
+    private static (Color PrimaryDark, Color Secondary, Color SecondaryDarkText) ComputeVariants(Color baseColor, bool isDark)
+    {
+        // Convert to SKColor for manipulation
+        var sk = new SKColor((byte)(baseColor.Red * 255), (byte)(baseColor.Green * 255), (byte)(baseColor.Blue * 255));
+        // Slightly adjust for contrast
+        var primaryDarkSk = AdjustLuminance(sk, isDark ? -0.15f : 0.15f);
+        var secondarySk = AdjustLuminance(sk, isDark ? -0.4f : 0.4f);
+        var secondaryTextSk = AdjustLuminance(sk, isDark ? 0.35f : -0.35f);
+        return (ToMaui(primaryDarkSk), ToMaui(secondarySk), ToMaui(secondaryTextSk));
+    }
+
+    private static SKColor AdjustLuminance(SKColor color, float delta)
+    {
+        // Convert to HSV for better control
+        color.ToHsv(out float h, out float s, out float v);
+        v = Math.Clamp(v + delta, 0f, 1f);
+        return SKColor.FromHsv(h, s, v);
+    }
+
+    private static Color ToMaui(SKColor c) => Color.FromRgb(c.Red, c.Green, c.Blue);
 }
