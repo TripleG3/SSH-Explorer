@@ -17,8 +17,7 @@
         <Button Text="● Connected" TextColor="Lime" BackgroundColor="Transparent" BorderColor="Lime" BorderWidth="1"
             IsVisible="{Binding IsConnected}"
             Command="{Binding DisconnectCommand}"/>
-        <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
-            <Button Text="Theme" Command="{Binding ToggleThemeCommand}"/>
+    <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
             <Button Text="Commands" Clicked="OnCommandsClicked"/>
         <Button Text="About" Clicked="OnAboutClicked"/>
         </HorizontalStackLayout>

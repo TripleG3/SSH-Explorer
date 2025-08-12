@@ -99,10 +99,7 @@ public partial class MainViewModel : BaseViewModel
         if (IsBusy) return; IsBusy = true;
         try
         {
-            // Apply TripleG3 theming from provided folder
-            var themeFolder = @"C:\\Users\\micha\\OneDrive\\Pictures\\From Cory\\Logo";
-            var primary = _theme is ThemeService ts ? ts.ComputePrimaryFromFolder(themeFolder) : Colors.CornflowerBlue;
-            _theme.ApplyDarkTheme(primary);
+            // Keep default app theme at startup; defer custom theming until later
 
             Profiles.Clear();
             foreach (var p in await _profiles.LoadAsync()) Profiles.Add(p);
@@ -270,9 +267,18 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private void ToggleTheme()
     {
-    var current = Application.Current!.RequestedTheme;
-    var primary = (Color)Application.Current!.Resources["PrimaryColor"];
-        if (current == AppTheme.Dark) _theme.ApplyLightTheme(primary); else _theme.ApplyDarkTheme(primary);
+        var current = Application.Current!.RequestedTheme;
+        var res = Application.Current!.Resources;
+        Color primary;
+        if (res.TryGetValue("Primary", out var val) && val is Color c)
+            primary = c;
+        else
+            primary = Colors.CornflowerBlue;
+
+        if (current == AppTheme.Dark)
+            _theme.ApplyLightTheme(primary);
+        else
+            _theme.ApplyDarkTheme(primary);
     }
 
     [RelayCommand]

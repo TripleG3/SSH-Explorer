@@ -16,6 +16,19 @@
             "request": "launch",
             "projectPath": "${workspaceFolder}\\SSHExplorer.csproj",
             "launchConfigurationId": "windowsmachine"
+        },
+        {
+            "name": ".NET MAUI (Windows) - Debug (no build)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "",
+            "program": "${workspaceFolder}\\bin\\Debug\\net9.0-windows10.0.19041.0\\win10-x64\\SSHExplorer.exe",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
         }
     ]
 }
