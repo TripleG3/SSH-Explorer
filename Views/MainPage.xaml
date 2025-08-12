@@ -17,8 +17,6 @@
         <Button Text="● Connected" TextColor="Lime" BackgroundColor="Transparent" BorderColor="Lime" BorderWidth="1"
             IsVisible="{Binding IsConnected}"
             Command="{Binding DisconnectCommand}"/>
-            <Button Text="⟲ Remote" Command="{Binding RefreshRemoteCommand}"/>
-            <Button Text="⟲ Local" Command="{Binding RefreshLocalCommand}"/>
             <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
             <Button Text="Theme" Command="{Binding ToggleThemeCommand}"/>
             <Button Text="Commands" Clicked="OnCommandsClicked"/>
@@ -27,10 +25,11 @@
         <!-- Dual Pane Explorer -->
     <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,Auto,*">
             <!-- Remote Pane -->
-            <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
+        <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Remote" FontAttributes="Bold"/>
                 <HorizontalStackLayout Grid.Row="1" Spacing="8">
-                    <Button Text="◀ Back" Command="{Binding GoBackRemoteCommand}"/>
+            <Button Text="◀" Command="{Binding GoBackRemoteCommand}"/>
+            <Button Text="⟲" Command="{Binding RefreshRemoteCommand}"/>
                 </HorizontalStackLayout>
                 <Entry Grid.Row="2" Text="{Binding RemotePath}"/>
                 <CollectionView Grid.Row="3" ItemsSource="{Binding RemoteItems}" SelectedItem="{Binding SelectedRemoteItem}" SelectionMode="None">
@@ -68,10 +67,11 @@
             </Grid>
 
             <!-- Local Pane -->
-            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
+        <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
                 <Label Grid.Row="0" Text="Local" FontAttributes="Bold"/>
                 <HorizontalStackLayout Grid.Row="1" Spacing="8">
-                    <Button Text="◀ Back" Command="{Binding GoBackLocalCommand}"/>
+            <Button Text="◀" Command="{Binding GoBackLocalCommand}"/>
+            <Button Text="⟲" Command="{Binding RefreshLocalCommand}"/>
                 </HorizontalStackLayout>
                 <Entry Grid.Row="2" Text="{Binding LocalPath}"/>
                 <CollectionView Grid.Row="3" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}" SelectionMode="None">
@@ -109,10 +109,10 @@
                 <Button Command="{Binding TogglePinCommand}">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="True">
-                            <Setter Property="Text" Value="📌 Unpin" />
+                            <Setter Property="Text" Value="📌" />
                         </DataTrigger>
                         <DataTrigger TargetType="Button" Binding="{Binding IsTerminalPinned}" Value="False">
-                            <Setter Property="Text" Value="📍 Pin" />
+                            <Setter Property="Text" Value="�" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
