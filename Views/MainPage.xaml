@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SSHExplorer.ViewModels"
+             xmlns:sftp="clr-namespace:Renci.SshNet.Sftp;assembly=Renci.SshNet"
+             x:Class="SSHExplorer.Views.MainPage"
+             x:DataType="vm:MainViewModel"
+         Title="SSH Explorer">
+    <Grid RowDefinitions="Auto,* ,Auto">
+        <!-- Toolbar -->
+        <HorizontalStackLayout Padding="8" Spacing="8">
+            <Picker Title="Profile" ItemsSource="{Binding Profiles}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedProfile}" WidthRequest="250"/>
+            <Button Text="Connect" Command="{Binding ConnectCommand}"/>
+            <Button Text="⟲ Remote" Command="{Binding RefreshRemoteCommand}"/>
+            <Button Text="⟲ Local" Command="{Binding RefreshLocalCommand}"/>
+            <Button Text="◀ Remote" Command="{Binding GoBackRemoteCommand}"/>
+            <Button Text="◀ Local" Command="{Binding GoBackLocalCommand}"/>
+            <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
+            <Button Text="Theme" Command="{Binding ToggleThemeCommand}"/>
+            <Button Text="Commands" Clicked="OnCommandsClicked"/>
+        </HorizontalStackLayout>
+
+        <!-- Dual Pane Explorer -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,*">
+            <!-- Remote Pane -->
+            <VerticalStackLayout Grid.Column="0" Padding="8">
+                <Label Text="Remote" FontAttributes="Bold"/>
+                <Entry Text="{Binding RemotePath}"/>
+                <CollectionView ItemsSource="{Binding RemoteItems}" SelectedItem="{Binding SelectedRemoteItem}">
+                    <CollectionView.ItemTemplate>
+            <DataTemplate x:DataType="sftp:SftpFile">
+                            <Grid Padding="6">
+                                <Label Text="{Binding Name}"/>
+                                <Grid.GestureRecognizers>
+                                    <DragGestureRecognizer CanDrag="True" DragStarting="OnRemoteDragStarting" />
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateRemoteCommand}" CommandParameter="{Binding .}" NumberOfTapsRequired="2"/>
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+                <VerticalStackLayout.GestureRecognizers>
+                    <DropGestureRecognizer AllowDrop="True" Drop="OnRemoteDrop" />
+                </VerticalStackLayout.GestureRecognizers>
+            </VerticalStackLayout>
+
+            <!-- Local Pane -->
+            <VerticalStackLayout Grid.Column="1" Padding="8">
+                <Label Text="Local" FontAttributes="Bold"/>
+                <Entry Text="{Binding LocalPath}"/>
+        <CollectionView ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}">
+                    <CollectionView.ItemTemplate>
+            <DataTemplate x:DataType="x:Object">
+                            <Grid Padding="6">
+                <Label Text="{Binding Name}"/>
+                                <Grid.GestureRecognizers>
+                                    <DragGestureRecognizer CanDrag="True" DragStarting="OnLocalDragStarting" />
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=NavigateLocalCommand}" CommandParameter="{Binding .}" NumberOfTapsRequired="2"/>
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+                <VerticalStackLayout.GestureRecognizers>
+                    <DropGestureRecognizer AllowDrop="True" Drop="OnLocalDrop" />
+                </VerticalStackLayout.GestureRecognizers>
+            </VerticalStackLayout>
+        </Grid>
+
+        <!-- Docked Terminal -->
+    <Grid Grid.Row="2" RowDefinitions="*,Auto" BackgroundColor="{AppThemeBinding Light=#111111, Dark=#000000}" IsVisible="{Binding IsTerminalVisible}">
+            <Editor Text="{Binding TerminalOutput}" IsReadOnly="True" AutoSize="TextChanges"/>
+            <HorizontalStackLayout Grid.Row="1" Padding="6" Spacing="6">
+                <Entry Text="{Binding TerminalInput}" Placeholder="Type command..." HorizontalOptions="FillAndExpand"/>
+                <Button Text="Run" Command="{Binding ExecuteCommand}"/>
+        <Button Text="⬇" Command="{Binding DownloadSelectedCommand}"/>
+        <Button Text="⬆" Command="{Binding UploadSelectedCommand}"/>
+            </HorizontalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>
