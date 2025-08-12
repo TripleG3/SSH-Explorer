@@ -54,19 +54,35 @@ public partial class MainViewModel : BaseViewModel
     private async Task OpenRemoteFolderAsync(SftpFile item)
     {
         if (item is null || !item.IsDirectory) return;
-    var next = PathHelpers.CombineUnix(RemotePath, item.Name);
-        await _ssh.ChangeDirectoryAsync(next);
-        RemotePath = next;
-        await RefreshRemoteAsync();
+        try
+        {
+            var next = PathHelpers.CombineUnix(RemotePath, item.Name);
+            await _ssh.ChangeDirectoryAsync(next);
+            RemotePath = next;
+            await RefreshRemoteAsync();
+        }
+        catch (Exception ex)
+        {
+            AppendOutput($"Open folder failed: {ex.Message}\n");
+            await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
+        }
     }
 
     [RelayCommand]
     private void OpenLocalFolder(FileSystemInfo fsi)
     {
-        if (fsi is DirectoryInfo d)
+        try
         {
-            LocalPath = d.FullName;
-            RefreshLocal();
+            if (fsi is DirectoryInfo d)
+            {
+                LocalPath = d.FullName;
+                RefreshLocal();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendOutput($"Open local folder failed: {ex.Message}\n");
+            _ = _dialogs.DisplayMessageAsync("Open Folder", "Could not open the folder on this device.");
         }
     }
 
@@ -198,11 +214,20 @@ public partial class MainViewModel : BaseViewModel
     private async Task RefreshRemoteAsync()
     {
         if (!_ssh.IsConnected) return;
-        RemoteItems.Clear();
-        foreach (var item in await _ssh.ListDirectoryAsync(RemotePath))
+        try
         {
-            if (item.Name is "." or "..") continue;
-            RemoteItems.Add(item);
+            RemoteItems.Clear();
+            var items = await _ssh.ListDirectoryAsync(RemotePath);
+            foreach (var item in items)
+            {
+                if (item.Name is "." or "..") continue;
+                RemoteItems.Add(item);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendOutput($"List directory failed: {ex.Message}\n");
+            await _dialogs.DisplayMessageAsync("Browse", $"Could not load folder contents: {ex.Message}");
         }
     }
 
@@ -258,10 +283,18 @@ public partial class MainViewModel : BaseViewModel
     {
         if (item.IsDirectory)
         {
-            var next = PathHelpers.CombineUnix(RemotePath, item.Name);
-            await _ssh.ChangeDirectoryAsync(next);
-            RemotePath = next;
-            await RefreshRemoteAsync();
+            try
+            {
+                var next = PathHelpers.CombineUnix(RemotePath, item.Name);
+                await _ssh.ChangeDirectoryAsync(next);
+                RemotePath = next;
+                await RefreshRemoteAsync();
+            }
+            catch (Exception ex)
+            {
+                AppendOutput($"Open folder failed: {ex.Message}\n");
+                await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
+            }
         }
         else
         {
@@ -270,67 +303,77 @@ public partial class MainViewModel : BaseViewModel
             switch (choice)
             {
                 case "Execute":
-                    await ExecuteRemoteFile(item);
+            try { await ExecuteRemoteFile(item); }
+            catch (Exception ex) { AppendOutput($"Execute failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Execute", "Could not execute the file."); }
                     break;
                 case "Download":
-                    await DownloadRemoteFile(item);
+            try { await DownloadRemoteFile(item); }
+            catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Download", "Could not download the file."); }
                     break;
                 case "Delete":
-                    await DeleteRemoteFile(item);
+            try { await DeleteRemoteFile(item); }
+            catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the file."); }
                     break;
                 case "Rename":
-                    await RenameRemoteFile(item);
+            try { await RenameRemoteFile(item); }
+            catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the file."); }
                     break;
             }
         }
     }
 
     [RelayCommand]
-    private void NavigateLocal(FileSystemInfo fsi)
+    private async Task NavigateLocal(FileSystemInfo fsi)
     {
         if (fsi is DirectoryInfo d)
         {
-            LocalPath = d.FullName;
-            RefreshLocal();
+            try { LocalPath = d.FullName; RefreshLocal(); }
+            catch (Exception ex) { AppendOutput($"Open failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Open", "Could not open the item."); }
+            return;
         }
-        else
+
+        // local file actions
+        var choice = await _dialogs.DisplayActionSheetAsync(fsi.Name, "Cancel", null, "Open", "Upload", "Delete", "Rename");
+        switch (choice)
         {
-            // local file actions
-            var _ = _dialogs.DisplayActionSheetAsync(fsi.Name, "Cancel", null, "Open", "Upload", "Delete", "Rename").ContinueWith(async t =>
-            {
-                var choice = t.Result;
-                switch (choice)
+            case "Open":
+                // For files, Open could be a no-op or platform open; here we do nothing
+                break;
+            case "Upload":
+                if (fsi is FileInfo fi)
                 {
-                    case "Upload":
-                        await UploadLocalFile((FileInfo)fsi);
-                        break;
-                    case "Delete":
-                        try { File.Delete(fsi.FullName); RefreshLocal(); }
-                        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
-                        break;
-                    case "Rename":
-                        var n = await _dialogs.DisplayPromptAsync("Rename", "New name:", initialValue: fsi.Name);
-                        if (!string.IsNullOrWhiteSpace(n))
-                        {
-                            var target = Path.Combine(Path.GetDirectoryName(fsi.FullName)!, n);
-                            File.Move(fsi.FullName, target, true);
-                            RefreshLocal();
-                        }
-                        break;
+                    try { await UploadLocalFile(fi); }
+                    catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Upload", "Could not upload the file."); }
                 }
-            });
+                break;
+            case "Delete":
+                try { await ConfirmAndDeleteLocalAsync(fsi); }
+                catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
+                break;
+            case "Rename":
+                try { await RenameLocalAsync(fsi); }
+                catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the item."); }
+                break;
         }
     }
 
     [RelayCommand]
     private async Task GoBackRemoteAsync()
     {
-    var parent = PathHelpers.ParentUnix(RemotePath);
+        var parent = PathHelpers.ParentUnix(RemotePath);
         if (parent != RemotePath)
         {
-            await _ssh.ChangeDirectoryAsync(parent);
-            RemotePath = parent;
-            await RefreshRemoteAsync();
+            try
+            {
+                await _ssh.ChangeDirectoryAsync(parent);
+                RemotePath = parent;
+                await RefreshRemoteAsync();
+            }
+            catch (Exception ex)
+            {
+                AppendOutput($"Open folder failed: {ex.Message}\n");
+                await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
+            }
         }
     }
 
@@ -348,7 +391,7 @@ public partial class MainViewModel : BaseViewModel
     var dest = Path.Combine(LocalPath, item.Name);
         IsBusy = true;
     try { await _ssh.DownloadFileAsync(PathHelpers.CombineUnix(RemotePath, item.Name), dest); AppendOutput($"Downloaded {item.Name}\n"); RefreshLocal(); }
-        catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Download", "Could not download the file."); }
         finally { IsBusy = false; }
     }
 
@@ -359,7 +402,7 @@ public partial class MainViewModel : BaseViewModel
     var dest = PathHelpers.CombineUnix(RemotePath, item.Name);
         IsBusy = true;
         try { await _ssh.UploadFileAsync(item.FullName, dest); AppendOutput($"Uploaded {item.Name}\n"); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Upload", "Could not upload the file."); }
         finally { IsBusy = false; }
     }
 
@@ -475,8 +518,8 @@ public partial class MainViewModel : BaseViewModel
         if (!ok) return;
     var path = PathHelpers.CombineUnix(RemotePath, item.Name);
         var cmd = item.IsDirectory ? $"rm -rf '{path}'" : $"rm -f '{path}'";
-        try { await _ssh.ExecuteCommandAsync(cmd); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
+    try { await _ssh.ExecuteCommandAsync(cmd); await RefreshRemoteAsync(); }
+    catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
     }
 
     private async Task CopyRemoteAsync(SftpFile item)
@@ -486,8 +529,8 @@ public partial class MainViewModel : BaseViewModel
         if (string.IsNullOrWhiteSpace(dest)) return;
         var ok = await _dialogs.DisplayAlertAsync("Confirm", $"cp -r '{src}' '{dest}'?", "OK", "Cancel");
         if (!ok) return;
-        try { await _ssh.ExecuteCommandAsync($"cp -r '{src}' '{dest}'"); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); }
+    try { await _ssh.ExecuteCommandAsync($"cp -r '{src}' '{dest}'"); await RefreshRemoteAsync(); }
+    catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Copy", "Could not copy the item."); }
     }
 
     private async Task MoveRemoteAsync(SftpFile item)
@@ -497,8 +540,8 @@ public partial class MainViewModel : BaseViewModel
         if (string.IsNullOrWhiteSpace(dest) || dest == src) return;
         var ok = await _dialogs.DisplayAlertAsync("Confirm", $"mv '{src}' '{dest}'?", "OK", "Cancel");
         if (!ok) return;
-        try { await _ssh.ExecuteCommandAsync($"mv '{src}' '{dest}'"); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); }
+    try { await _ssh.ExecuteCommandAsync($"mv '{src}' '{dest}'"); await RefreshRemoteAsync(); }
+    catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Move", "Could not move the item."); }
     }
 
     private async Task ConfirmAndDeleteLocalAsync(FileSystemInfo fsi)
@@ -510,7 +553,7 @@ public partial class MainViewModel : BaseViewModel
             if (fsi is DirectoryInfo dd) dd.Delete(true); else File.Delete(fsi.FullName);
             RefreshLocal();
         }
-        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
     }
 
     private async Task RenameLocalAsync(FileSystemInfo fsi)
@@ -526,7 +569,7 @@ public partial class MainViewModel : BaseViewModel
                 File.Move(fsi.FullName, target, true);
             RefreshLocal();
         }
-        catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the item."); }
     }
 
     private async Task CopyLocalAsync(FileSystemInfo fsi)
@@ -539,7 +582,7 @@ public partial class MainViewModel : BaseViewModel
             else File.Copy(fsi.FullName, dest, true);
             RefreshLocal();
         }
-        catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Copy", "Could not copy the item."); }
     }
 
     private async Task MoveLocalAsync(FileSystemInfo fsi)
@@ -554,7 +597,7 @@ public partial class MainViewModel : BaseViewModel
                 File.Move(fsi.FullName, dest, true);
             RefreshLocal();
         }
-        catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); }
+    catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Move", "Could not move the item."); }
     }
 
     private static void CopyDirectoryRecursive(string sourceDir, string destDir)

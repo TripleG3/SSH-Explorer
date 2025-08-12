@@ -56,7 +56,19 @@ public sealed class SshService : ISshService
     public async Task<IEnumerable<SftpFile>> ListDirectoryAsync(string path, CancellationToken ct = default)
     {
         if (_sftp is null) throw new InvalidOperationException("Not connected");
-        return await Task.Run(() => _sftp.ListDirectory(path), ct);
+        try
+        {
+            return await Task.Run(() =>
+            {
+                var results = _sftp.ListDirectory(path);
+                // Materialize to avoid deferred enumeration exceptions outside callers' try/catch
+                return results.ToList();
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            throw new IOException($"Failed to list '{path}': {ex.Message}", ex);
+        }
     }
 
     public async Task DownloadFileAsync(string remotePath, string localPath, IProgress<ulong>? progress = null, CancellationToken ct = default)
@@ -93,11 +105,18 @@ public sealed class SshService : ISshService
     public async Task ChangeDirectoryAsync(string path, CancellationToken ct = default)
     {
         if (_sftp is null) throw new InvalidOperationException("Not connected");
-        await Task.Run(() =>
+        try
         {
-            var real = _sftp.GetAttributes(path); // validate
-            _currentDir = path;
-        }, ct);
+            await Task.Run(() =>
+            {
+                var _ = _sftp.GetAttributes(path); // validate
+                _currentDir = path;
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            throw new IOException($"Failed to open '{path}': {ex.Message}", ex);
+        }
     }
 
     public ValueTask DisposeAsync()

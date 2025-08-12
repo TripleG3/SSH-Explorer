@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Microsoft.Maui.ApplicationModel;
 
 namespace SSHExplorer.Services;
 
@@ -12,11 +13,14 @@ public sealed class DialogService : IDialogService
     }
 
     public Task<bool> DisplayAlertAsync(string title, string message, string accept, string cancel)
-        => GetPage().DisplayAlert(title, message, accept, cancel);
+        => MainThread.InvokeOnMainThreadAsync(() => GetPage().DisplayAlert(title, message, accept, cancel));
+
+    public Task DisplayMessageAsync(string title, string message, string accept = "OK")
+        => MainThread.InvokeOnMainThreadAsync(() => GetPage().DisplayAlert(title, message, accept));
 
     public Task<string?> DisplayPromptAsync(string title, string message, string accept = "OK", string cancel = "Cancel", string placeholder = "", int maxLength = -1, string keyboard = "default", string initialValue = "")
-        => GetPage().DisplayPromptAsync(title, message, accept, cancel, placeholder, maxLength, Keyboard.Default, initialValue);
+        => MainThread.InvokeOnMainThreadAsync(() => GetPage().DisplayPromptAsync(title, message, accept, cancel, placeholder, maxLength, Keyboard.Default, initialValue));
 
     public Task<string?> DisplayActionSheetAsync(string title, string cancel, string? destruction, params string[] buttons)
-        => GetPage().DisplayActionSheet(title, cancel, destruction, buttons);
+        => MainThread.InvokeOnMainThreadAsync(() => GetPage().DisplayActionSheet(title, cancel, destruction, buttons));
 }
