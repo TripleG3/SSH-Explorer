@@ -20,13 +20,21 @@ public static class MauiProgram
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
 
-		// Services & ViewModels
+		// Core Services using CIS pattern
 		builder.Services.AddSingleton<ISshService, SshService>();
 		builder.Services.AddSingleton<IProfileService, ProfileService>();
+		builder.Services.AddSingleton<IFileExplorerService, FileExplorerService>();
+		builder.Services.AddSingleton<ITerminalService, TerminalService>();
+		
+		// UI Services
 		builder.Services.AddSingleton<IThemeService, ThemeService>();
 		builder.Services.AddSingleton<IDialogService, DialogService>();
+		
+		// ViewModels & Views
 		builder.Services.AddSingleton<MainViewModel>();
 		builder.Services.AddSingleton<MainPage>();
+		builder.Services.AddTransient<OptionsViewModel>();
+		builder.Services.AddTransient<OptionsPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

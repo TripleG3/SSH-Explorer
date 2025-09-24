@@ -67,6 +67,7 @@
 		<PackageReference Include="SkiaSharp" Version="*" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="*" />
 		<PackageReference Include="System.Text.Json" Version="*" />
+		<PackageReference Include="TripleG3.CIS.Maui" Version="1.0.2" />
 	</ItemGroup>
 
 </Project>

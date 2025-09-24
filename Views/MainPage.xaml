@@ -7,46 +7,68 @@
              x:Class="SSHExplorer.Views.MainPage"
              x:Name="RootPage"
              x:DataType="vm:MainViewModel"
-         Title="SSH Explorer">
-    <Grid RowDefinitions="Auto,* ,Auto">
+             Title="SSH Explorer"
+             BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
+    <Grid RowDefinitions="Auto,* ,Auto" BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
         <!-- Toolbar -->
-        <HorizontalStackLayout Padding="8" Spacing="8">
-            <Picker Title="Profile" ItemsSource="{Binding Profiles}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedProfile}" WidthRequest="250"/>
-            <Button Text="Connect" Command="{Binding ConnectCommand}"/>
+        <HorizontalStackLayout Padding="8" Spacing="8" BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}">
+            <Picker Title="Profile" ItemsSource="{Binding ProfileState.Profiles}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding ProfileState.SelectedProfile}" WidthRequest="250"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+            <Button Text="Connect" Command="{Binding ConnectCommand}" 
+                    BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonPrimary}, Dark={StaticResource GitHubDark_ButtonPrimary}}"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonText}, Dark={StaticResource GitHubDark_ButtonText}}"/>
         <!-- Connection status indicator (visible only when connected). Click to disconnect with confirmation. -->
         <Button Text="● Connected" TextColor="Lime" BackgroundColor="Transparent" BorderColor="Lime" BorderWidth="1"
-            IsVisible="{Binding IsConnected}"
+            IsVisible="{Binding SshState.IsConnected}"
             Command="{Binding DisconnectCommand}"/>
-    <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"/>
-            <Button Text="Commands" Clicked="OnCommandsClicked"/>
-        <Button Text="About" Clicked="OnAboutClicked"/>
+    <Button Text="Terminal" Command="{Binding ToggleTerminalCommand}"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+            <Button Text="Commands" Clicked="OnCommandsClicked"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+            <Button Text="Options" Clicked="OnOptionsClicked"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+        <Button Text="About" Clicked="OnAboutClicked"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                    TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
         </HorizontalStackLayout>
 
         <!-- Dual Pane Explorer -->
-    <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,*">
+    <Grid x:Name="ExplorerGrid" Grid.Row="1" ColumnDefinitions="*,*" BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
             <!-- Remote Pane -->
-        <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
-                <Label Grid.Row="0" Text="Remote" FontAttributes="Bold"/>
+        <Grid Grid.Column="0" Padding="8" RowDefinitions="Auto,Auto,Auto,*" BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}">
+                <Label Grid.Row="0" Text="Remote" FontAttributes="Bold" 
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                 <HorizontalStackLayout Grid.Row="1" Spacing="8">
-            <Button Text="◀" Command="{Binding GoBackRemoteCommand}"/>
-            <Button Text="⟲" Command="{Binding RefreshRemoteCommand}"/>
+            <Button Text="◀" Command="{Binding GoBackRemoteCommand}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+            <Button Text="⟲" Command="{Binding RefreshRemoteCommand}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                 </HorizontalStackLayout>
-                <Entry Grid.Row="2" Text="{Binding RemotePath}"/>
-                <CollectionView Grid.Row="3" ItemsSource="{Binding RemoteItems}" SelectedItem="{Binding SelectedRemoteItem}" SelectionMode="None">
+                <Entry Grid.Row="2" Text="{Binding SshState.RemotePath}" IsReadOnly="True"
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}"/>
+                <CollectionView Grid.Row="3" ItemsSource="{Binding FileExplorerState.RemoteItems}" SelectedItem="{Binding FileExplorerState.SelectedRemoteItem}" SelectionMode="None"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="sftp:SftpFile">
                             <Grid Padding="6" InputTransparent="False">
-                                <Label Text="{Binding Name}"/>
+                                <Label Text="{Binding Name}" 
+                                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnRemoteDragStarting" />
                                     <TapGestureRecognizer NumberOfTapsRequired="2"
-                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenRemoteFolderCommand}"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateRemoteCommand}"
                                                          CommandParameter="{Binding .}" />
                                     <TapGestureRecognizer NumberOfTapsRequired="1"
-                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowRemoteActionsCommand}"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateRemoteCommand}"
                                                          CommandParameter="{Binding .}" />
                                     <TapGestureRecognizer Buttons="Secondary"
-                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowRemoteActionsCommand}"
+                                                         Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateRemoteCommand}"
                                                          CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
@@ -59,28 +81,37 @@
             </Grid>
 
             <!-- Local Pane -->
-            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*">
-                <Label Grid.Row="0" Text="Local" FontAttributes="Bold"/>
+            <Grid Grid.Column="1" Padding="8" RowDefinitions="Auto,Auto,Auto,*" BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}">
+                <Label Grid.Row="0" Text="Local" FontAttributes="Bold" 
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                 <HorizontalStackLayout Grid.Row="1" Spacing="8">
-            <Button Text="◀" Command="{Binding GoBackLocalCommand}"/>
-            <Button Text="⟲" Command="{Binding RefreshLocalCommand}"/>
+            <Button Text="◀" Command="{Binding GoBackLocalCommand}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+            <Button Text="⟲" Command="{Binding RefreshLocalCommand}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                 </HorizontalStackLayout>
-                <Entry Grid.Row="2" Text="{Binding LocalPath}"/>
-                <CollectionView Grid.Row="3" ItemsSource="{Binding LocalItems}" SelectedItem="{Binding SelectedLocalItem}" SelectionMode="None">
+                <Entry Grid.Row="2" Text="{Binding SshState.LocalPath}" IsReadOnly="True"
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}"/>
+                <CollectionView Grid.Row="3" ItemsSource="{Binding FileExplorerState.LocalItems}" SelectedItem="{Binding FileExplorerState.SelectedLocalItem}" SelectionMode="None"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
                     <CollectionView.ItemTemplate>
             <DataTemplate x:DataType="io:FileSystemInfo">
                             <Grid Padding="6" InputTransparent="False">
-                                <Label Text="{Binding Name}"/>
+                                <Label Text="{Binding Name}" 
+                                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                                 <Grid.GestureRecognizers>
                                     <DragGestureRecognizer CanDrag="True" DragStarting="OnLocalDragStarting" />
                     <TapGestureRecognizer NumberOfTapsRequired="2"
-                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.OpenLocalFolderCommand}"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateLocalCommand}"
                              CommandParameter="{Binding .}" />
                     <TapGestureRecognizer NumberOfTapsRequired="1"
-                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowLocalActionsCommand}"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateLocalCommand}"
                              CommandParameter="{Binding .}" />
                     <TapGestureRecognizer Buttons="Secondary"
-                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.ShowLocalActionsCommand}"
+                             Command="{Binding Source={x:Reference RootPage}, Path=BindingContext.NavigateLocalCommand}"
                              CommandParameter="{Binding .}" />
                                 </Grid.GestureRecognizers>
                             </Grid>
@@ -94,20 +125,28 @@
         </Grid>
 
         <!-- Docked Terminal -->
-    <Grid x:Name="TerminalContainer" Grid.Row="2" RowDefinitions="Auto,* ,Auto" BackgroundColor="{AppThemeBinding Light=#111111, Dark=#000000}" IsVisible="{Binding IsTerminalVisible}" HeightRequest="{Binding TerminalHeight}">
+    <Grid x:Name="TerminalContainer" Grid.Row="2" RowDefinitions="Auto,* ,Auto" 
+          BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Terminal}, Dark={StaticResource GitHubDark_Terminal}}" 
+          IsVisible="{Binding TerminalState.IsVisible}" HeightRequest="{Binding TerminalState.Height}">
             <!-- Header with pin toggle -->
             <HorizontalStackLayout Padding="6" Spacing="10">
-                <Label Text="Terminal" TextColor="White" FontAttributes="Bold"/>
+                <Label Text="Terminal" 
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TerminalText}, Dark={StaticResource GitHubDark_TerminalText}}" 
+                       FontAttributes="Bold"/>
                 <ImageButton x:Name="PinButton" WidthRequest="32" HeightRequest="32" BackgroundColor="Transparent" Command="{Binding TogglePinCommand}"/>
             </HorizontalStackLayout>
             <ScrollView Grid.Row="1">
-                <Label Text="{Binding TerminalOutput}" TextColor="White" LineBreakMode="WordWrap"/>
+                <Label Text="{Binding TerminalState.Output}" 
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TerminalText}, Dark={StaticResource GitHubDark_TerminalText}}" 
+                       LineBreakMode="WordWrap"/>
             </ScrollView>
-            <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" Padding="6">
-                <Entry Grid.Column="0" Text="{Binding TerminalInput}" Placeholder="Type command..."/>
-                <Button Grid.Column="1" Text="Run" Command="{Binding ExecuteCommand}"/>
-                <Button Grid.Column="2" Text="⬇" Command="{Binding DownloadSelectedCommand}"/>
-                <Button Grid.Column="3" Text="⬆" Command="{Binding UploadSelectedCommand}"/>
+            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Padding="6">
+                <Entry Grid.Column="0" Text="{Binding TerminalState.Input}" Placeholder="Type command..."
+                       TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TerminalText}, Dark={StaticResource GitHubDark_TerminalText}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}"/>
+                <Button Grid.Column="1" Text="Run" Command="{Binding ExecuteCommand}"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonPrimary}, Dark={StaticResource GitHubDark_ButtonPrimary}}"
+                        TextColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonText}, Dark={StaticResource GitHubDark_ButtonText}}"/>
             </Grid>
     </Grid>
     <!-- Hover/touch handle to bring terminal up -->
@@ -115,7 +154,9 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <Border StrokeThickness="0" BackgroundColor="#3A3A3A" HeightRequest="6" WidthRequest="140" HorizontalOptions="Center" VerticalOptions="Center" StrokeShape="RoundRectangle 3,3,3,3">
+        <Border StrokeThickness="0" 
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Border}, Dark={StaticResource GitHubDark_Border}}" 
+                HeightRequest="6" WidthRequest="140" HorizontalOptions="Center" VerticalOptions="Center" StrokeShape="RoundRectangle 3,3,3,3">
             <Border.GestureRecognizers>
                 <TapGestureRecognizer Command="{Binding ToggleTerminalCommand}"/>
                 <PanGestureRecognizer PanUpdated="OnTerminalHandlePanUpdated" />

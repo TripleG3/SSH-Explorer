@@ -1,661 +1,494 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Renci.SshNet.Sftp;
+using System.ComponentModel;
+using System.Windows.Input;
 using SSHExplorer.Models;
 using SSHExplorer.Services;
-using System.Collections.ObjectModel;
-using Microsoft.Maui.Storage;
 using SSHExplorer.Utilities;
+using Renci.SshNet.Sftp;
 
 namespace SSHExplorer.ViewModels;
 
-public partial class MainViewModel : BaseViewModel
+public sealed class MainViewModel : INotifyPropertyChanged
 {
-    private readonly ISshService _ssh;
-    private readonly IProfileService _profiles;
-    private readonly IDialogService _dialogs;
+    private readonly ISshService _sshService;
+    private readonly IProfileService _profileService;
+    private readonly IFileExplorerService _fileExplorerService;
+    private readonly ITerminalService _terminalService;
+    private readonly IThemeService _themeService;
+    private readonly IDialogService _dialogService;
 
-    public ObservableCollection<Profile> Profiles { get; } = new();
-
-    [ObservableProperty] private Profile? selectedProfile;
-
-    [ObservableProperty] private string localPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    [ObservableProperty] private string remotePath = "/";
-
-    public ObservableCollection<SftpFile> RemoteItems { get; } = new();
-    public ObservableCollection<FileSystemInfo> LocalItems { get; } = new();
-
-    [ObservableProperty] private string terminalOutput = string.Empty;
-    [ObservableProperty] private string terminalInput = string.Empty;
-    [ObservableProperty] private bool isTerminalVisible = true;
-    [ObservableProperty] private bool isTerminalPinned = false;
-    [ObservableProperty] private double terminalHeight = 220; // pixels
-    [ObservableProperty] private double paneSplitRatio = 0.5; // 0..1 (left/remote width ratio)
-
-    [ObservableProperty] private bool isConnected;
-
-    [ObservableProperty]
-    private SftpFile? selectedRemoteItem;
-
-    partial void OnSelectedRemoteItemChanged(SftpFile? value)
+    public MainViewModel(
+        ISshService sshService,
+        IProfileService profileService,
+        IFileExplorerService fileExplorerService,
+        ITerminalService terminalService,
+        IThemeService themeService,
+        IDialogService dialogService)
     {
-        // No-op: navigation now handled by double-click gesture
+        _sshService = sshService;
+        _profileService = profileService;
+        _fileExplorerService = fileExplorerService;
+        _terminalService = terminalService;
+        _themeService = themeService;
+        _dialogService = dialogService;
+
+        // Subscribe to state changes
+        _sshService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SshState)));
+        _profileService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProfileState)));
+        _fileExplorerService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FileExplorerState)));
+        _terminalService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TerminalState)));
+
+        // Initialize commands
+        LoadCommand = new AsyncBindingCommand(_ => LoadAsync(), _ => !ProfileState.IsBusy, this);
+        ConnectCommand = new AsyncBindingCommand(_ => ConnectAsync(), _ => !SshState.IsBusy, this);
+        DisconnectCommand = new AsyncBindingCommand(_ => DisconnectAsync(), _ => SshState.IsConnected && !SshState.IsBusy, this);
+        RefreshRemoteCommand = new AsyncBindingCommand(_ => RefreshRemoteAsync(), _ => SshState.IsConnected && !FileExplorerState.IsBusy, this);
+        RefreshLocalCommand = new AsyncBindingCommand(_ => RefreshLocalAsync(), _ => !FileExplorerState.IsBusy, this);
+        ExecuteCommand = new AsyncBindingCommand(_ => ExecuteAsync(), _ => SshState.IsConnected && !TerminalState.IsBusy && !string.IsNullOrWhiteSpace(TerminalState.Input), this);
+        ToggleTerminalCommand = new AsyncBindingCommand(_ => _terminalService.ToggleVisibilityAsync(), _ => true, this);
+        TogglePinCommand = new AsyncBindingCommand(_ => _terminalService.TogglePinAsync(), _ => true, this);
+        ToggleThemeCommand = new AsyncBindingCommand(_ => ToggleThemeAsync(), _ => true, this);
+        NavigateRemoteCommand = new AsyncBindingCommand<SftpFile>(item => NavigateRemoteAsync(item!), _ => SshState.IsConnected, this);
+        NavigateLocalCommand = new AsyncBindingCommand<FileSystemInfo>(item => NavigateLocalAsync(item!), _ => true, this);
+        GoBackRemoteCommand = new AsyncBindingCommand(_ => GoBackRemoteAsync(), _ => SshState.IsConnected, this);
+        GoBackLocalCommand = new AsyncBindingCommand(_ => GoBackLocalAsync(), _ => true, this);
     }
 
-    [ObservableProperty]
-    private FileSystemInfo? selectedLocalItem;
+    public event PropertyChangedEventHandler? PropertyChanged;
 
-    partial void OnSelectedLocalItemChanged(FileSystemInfo? value)
-    {
-        // No-op: navigation now handled by double-click gesture
-    }
+    // State properties
+    public SshConnectionState SshState => _sshService.State;
+    public ProfileState ProfileState => _profileService.State;
+    public FileExplorerState FileExplorerState => _fileExplorerService.State;
+    public TerminalState TerminalState => _terminalService.State;
 
-    [RelayCommand]
-    private async Task OpenRemoteFolderAsync(SftpFile item)
-    {
-        if (item is null || !item.IsDirectory) return;
-        try
-        {
-            var next = PathHelpers.CombineUnix(RemotePath, item.Name);
-            await _ssh.ChangeDirectoryAsync(next);
-            RemotePath = next;
-            await RefreshRemoteAsync();
-        }
-        catch (Exception ex)
-        {
-            AppendOutput($"Open folder failed: {ex.Message}\n");
-            await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
-        }
-    }
+    // Commands
+    public ICommand LoadCommand { get; }
+    public ICommand ConnectCommand { get; }
+    public ICommand DisconnectCommand { get; }
+    public ICommand RefreshRemoteCommand { get; }
+    public ICommand RefreshLocalCommand { get; }
+    public ICommand ExecuteCommand { get; }
+    public ICommand ToggleTerminalCommand { get; }
+    public ICommand TogglePinCommand { get; }
+    public ICommand ToggleThemeCommand { get; }
+    public ICommand NavigateRemoteCommand { get; }
+    public ICommand NavigateLocalCommand { get; }
+    public ICommand GoBackRemoteCommand { get; }
+    public ICommand GoBackLocalCommand { get; }
 
-    [RelayCommand]
-    private void OpenLocalFolder(FileSystemInfo fsi)
-    {
-        try
-        {
-            if (fsi is DirectoryInfo d)
-            {
-                LocalPath = d.FullName;
-                RefreshLocal();
-            }
-        }
-        catch (Exception ex)
-        {
-            AppendOutput($"Open local folder failed: {ex.Message}\n");
-            _ = _dialogs.DisplayMessageAsync("Open Folder", "Could not open the folder on this device.");
-        }
-    }
-
-    private readonly IThemeService _theme;
-
-    public MainViewModel(ISshService ssh, IProfileService profiles, IThemeService theme, IDialogService dialogs)
-    {
-        _ssh = ssh; _profiles = profiles; _theme = theme; _dialogs = dialogs;
-    }
-
-    [RelayCommand]
     private async Task LoadAsync()
     {
-        if (IsBusy) return; IsBusy = true;
         try
         {
-            // Keep default app theme at startup; defer custom theming until later
-
-            Profiles.Clear();
-            foreach (var p in await _profiles.LoadAsync()) Profiles.Add(p);
-            // Try restore last used profile
-            var lastProfileName = Preferences.Get(PrefKeys.LastProfileName, string.Empty);
-            if (Profiles.Count == 0)
+            await _profileService.LoadAsync();
+            
+            // Try to restore the last used profile
+            var lastProfileName = Preferences.Get("LastProfileName", string.Empty);
+            if (ProfileState.Profiles.Count == 0)
             {
                 // Prompt for first profile
                 var created = await CreateProfileInteractiveAsync();
                 if (created is not null)
                 {
-                    Profiles.Add(created);
-                    SelectedProfile = created;
+                    await _profileService.AddOrUpdateAsync(created);
+                    await _profileService.SelectProfileAsync(created);
                 }
             }
-            else if (SelectedProfile is null)
+            else if (ProfileState.SelectedProfile is null)
             {
                 // Restore last used profile if available
-                SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Name, lastProfileName, StringComparison.OrdinalIgnoreCase))
-                                   ?? Profiles[0];
+                var profile = ProfileState.Profiles.FirstOrDefault(p => 
+                    string.Equals(p.Name, lastProfileName, StringComparison.OrdinalIgnoreCase)) 
+                    ?? ProfileState.Profiles.First();
+                
+                await _profileService.SelectProfileAsync(profile);
             }
-
-            // Restore UI state
-            IsTerminalVisible = Preferences.Get(PrefKeys.IsTerminalVisible, IsTerminalVisible);
-            IsTerminalPinned = Preferences.Get(PrefKeys.IsTerminalPinned, IsTerminalPinned);
-            TerminalHeight = Preferences.Get(PrefKeys.TerminalHeight, TerminalHeight);
-            PaneSplitRatio = Math.Clamp(Preferences.Get(PrefKeys.PaneSplitRatio, PaneSplitRatio), 0.1, 0.9);
         }
-        finally { IsBusy = false; }
+        catch (Exception ex)
+        {
+            await _dialogService.DisplayMessageAsync("Load Error", $"Failed to load profiles: {ex.Message}");
+        }
     }
 
-    [RelayCommand]
     private async Task ConnectAsync()
     {
-        // If no profile selected, guide the user to create one
-        if (SelectedProfile is null)
-        {
-            var created = await CreateProfileInteractiveAsync();
-            if (created is null) return; // user cancelled
-            Profiles.Add(created);
-            SelectedProfile = created;
-        }
-        if (IsBusy) return; IsBusy = true;
         try
         {
-            await _ssh.ConnectAsync(SelectedProfile);
-            RemotePath = SelectedProfile.DefaultRemotePath;
-            LocalPath = SelectedProfile.DefaultLocalPath;
+            // If no profile selected, guide the user to create one
+            if (ProfileState.SelectedProfile is null)
+            {
+                var created = await CreateProfileInteractiveAsync();
+                if (created is null) return; // user cancelled
+                
+                await _profileService.AddOrUpdateAsync(created);
+                await _profileService.SelectProfileAsync(created);
+            }
+
+            await _sshService.ConnectAsync(ProfileState.SelectedProfile!);
+            await _terminalService.AppendOutputAsync($"Connected to {ProfileState.SelectedProfile!.Host}\n");
+            
+            // Refresh file explorers
             await RefreshRemoteAsync();
-            RefreshLocal();
-            AppendOutput($"Connected to {SelectedProfile.Host}\n");
-            IsConnected = _ssh.IsConnected;
-            Preferences.Set(PrefKeys.LastProfileName, SelectedProfile.Name);
+            await RefreshLocalAsync();
         }
         catch (Exception ex)
         {
-            AppendOutput($"Error: {ex.Message}\n");
+            await _terminalService.AppendOutputAsync($"Connection failed: {ex.Message}\n");
+            await _dialogService.DisplayMessageAsync("Connection Error", $"Failed to connect: {ex.Message}");
         }
-        finally { IsBusy = false; }
     }
 
-    [RelayCommand]
     private async Task DisconnectAsync()
     {
-        if (!_ssh.IsConnected) return;
-        var ok = await _dialogs.DisplayAlertAsync("Disconnect", "Disconnect from current SSH session?", "OK", "Cancel");
-        if (!ok) return;
         try
         {
-            await _ssh.DisconnectAsync();
-            IsConnected = _ssh.IsConnected;
-            AppendOutput("Disconnected\n");
+            var ok = await _dialogService.DisplayAlertAsync("Disconnect", "Disconnect from current SSH session?", "OK", "Cancel");
+            if (!ok) return;
+
+            await _sshService.DisconnectAsync();
+            await _terminalService.AppendOutputAsync("Disconnected\n");
         }
         catch (Exception ex)
         {
-            AppendOutput($"Error: {ex.Message}\n");
+            await _terminalService.AppendOutputAsync($"Disconnect error: {ex.Message}\n");
         }
     }
 
-    private async Task<Profile?> CreateProfileInteractiveAsync()
-    {
-        // Gather minimal profile info via dialogs; return null if cancelled at the host stage
-        var name = await _dialogs.DisplayPromptAsync("Create Profile", "Enter a profile name:", "OK", "Cancel", "Default");
-        if (string.IsNullOrWhiteSpace(name)) name = "Default";
-
-        var host = await _dialogs.DisplayPromptAsync("Create Profile", "Host name or IP:", "OK", "Cancel");
-        if (string.IsNullOrWhiteSpace(host)) return null;
-
-        var user = await _dialogs.DisplayPromptAsync("Create Profile", "Username:", "OK", "Cancel");
-        if (string.IsNullOrWhiteSpace(user)) user = Environment.UserName;
-
-    var portStr = await _dialogs.DisplayPromptAsync("Create Profile", "Port:", "OK", "Cancel", initialValue: "22");
-    var pass = await _dialogs.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):", "OK", "Cancel");
-
-        var profile = new Profile
-        {
-            Name = name!,
-            Host = host!,
-            Username = user!,
-            Password = string.IsNullOrEmpty(pass) ? null : pass,
-            Port = int.TryParse(portStr, out var portVal) ? portVal : 22
-        };
-
-        await _profiles.AddOrUpdateAsync(profile);
-        return profile;
-    }
-
-    [RelayCommand]
     private async Task RefreshRemoteAsync()
     {
-        if (!_ssh.IsConnected) return;
+        if (!SshState.IsConnected) return;
+        
         try
         {
-            RemoteItems.Clear();
-            var items = await _ssh.ListDirectoryAsync(RemotePath);
-            foreach (var item in items)
-            {
-                if (item.Name is "." or "..") continue;
-                RemoteItems.Add(item);
-            }
+            await _fileExplorerService.RefreshRemoteAsync(SshState.RemotePath);
         }
         catch (Exception ex)
         {
-            AppendOutput($"List directory failed: {ex.Message}\n");
-            await _dialogs.DisplayMessageAsync("Browse", $"Could not load folder contents: {ex.Message}");
+            await _terminalService.AppendOutputAsync($"Remote refresh failed: {ex.Message}\n");
+            await _dialogService.DisplayMessageAsync("Browse Error", $"Could not load remote folder: {ex.Message}");
         }
     }
 
-    [RelayCommand]
-    private void RefreshLocal()
+    private async Task RefreshLocalAsync()
     {
-        LocalItems.Clear();
-        var di = new DirectoryInfo(LocalPath);
-        if (!di.Exists) return;
-        foreach (var d in di.EnumerateFileSystemInfos()) LocalItems.Add(d);
+        try
+        {
+            await _fileExplorerService.RefreshLocalAsync(SshState.LocalPath);
+        }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Local refresh failed: {ex.Message}\n");
+        }
     }
 
-    [RelayCommand]
     private async Task ExecuteAsync()
     {
-        if (string.IsNullOrWhiteSpace(TerminalInput)) return;
-        AppendOutput($"> {TerminalInput}\n");
-        var result = await _ssh.ExecuteCommandAsync(TerminalInput);
-        AppendOutput(result + "\n");
-        TerminalInput = string.Empty;
+        if (!SshState.IsConnected || string.IsNullOrWhiteSpace(TerminalState.Input)) return;
+
+        try
+        {
+            await _terminalService.AppendOutputAsync($"> {TerminalState.Input}\n");
+            var result = await _sshService.ExecuteCommandAsync(TerminalState.Input);
+            await _terminalService.AppendOutputAsync(result + "\n");
+            await _terminalService.SetInputAsync(string.Empty);
+        }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Command failed: {ex.Message}\n");
+        }
     }
 
-    public async Task<string> ExecuteCommandAsync(string cmd)
+    public async Task ExecuteCommandAsync(string command)
     {
-        var result = await _ssh.ExecuteCommandAsync(cmd);
-        AppendOutput($"> {cmd}\n{result}\n");
-        return result;
+        if (!SshState.IsConnected || string.IsNullOrWhiteSpace(command)) return;
+
+        try
+        {
+            await _terminalService.AppendOutputAsync($"> {command}\n");
+            var result = await _sshService.ExecuteCommandAsync(command);
+            await _terminalService.AppendOutputAsync(result + "\n");
+        }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Command failed: {ex.Message}\n");
+        }
     }
 
-    [RelayCommand]
-    private void ToggleTerminal() => IsTerminalVisible = !IsTerminalVisible;
-
-    [RelayCommand]
-    private void CollapseTerminalIfNotPinned()
-    {
-        if (!IsTerminalPinned)
-            IsTerminalVisible = false;
-    }
-
-    [RelayCommand]
-    private void ToggleTheme()
-    {
-        var current = Application.Current!.RequestedTheme;
-        var res = Application.Current!.Resources;
-        Color primary;
-        if (res.TryGetValue("Primary", out var val) && val is Color c)
-            primary = c;
-        else
-            primary = Colors.CornflowerBlue;
-
-        if (current == AppTheme.Dark)
-            _theme.ApplyLightTheme(primary);
-        else
-            _theme.ApplyDarkTheme(primary);
-    }
-
-    [RelayCommand]
-    private void TogglePin() => IsTerminalPinned = !IsTerminalPinned;
-
-    [RelayCommand]
     private async Task NavigateRemoteAsync(SftpFile item)
     {
         if (item.IsDirectory)
         {
             try
             {
-                var next = PathHelpers.CombineUnix(RemotePath, item.Name);
-                await _ssh.ChangeDirectoryAsync(next);
-                RemotePath = next;
+                var newPath = PathHelpers.CombineUnix(SshState.RemotePath, item.Name);
+                await _sshService.ChangeDirectoryAsync(newPath);
                 await RefreshRemoteAsync();
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                // Permission denied - show a user-friendly toast/message
+                await _terminalService.AppendOutputAsync($"Access denied: {ex.Message}\n");
+                await _dialogService.DisplayMessageAsync("Access Denied", ex.Message);
             }
             catch (Exception ex)
             {
-                AppendOutput($"Open folder failed: {ex.Message}\n");
-                await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
+                await _terminalService.AppendOutputAsync($"Navigation failed: {ex.Message}\n");
+                await _dialogService.DisplayMessageAsync("Navigation Error", $"Could not open folder: {ex.Message}");
             }
         }
         else
         {
-            // file actions
-            var choice = await _dialogs.DisplayActionSheetAsync(item.Name, "Cancel", null, "Execute", "Download", "Delete", "Rename");
-            switch (choice)
-            {
-                case "Execute":
-            try { await ExecuteRemoteFile(item); }
-            catch (Exception ex) { AppendOutput($"Execute failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Execute", "Could not execute the file."); }
-                    break;
-                case "Download":
-            try { await DownloadRemoteFile(item); }
-            catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Download", "Could not download the file."); }
-                    break;
-                case "Delete":
-            try { await DeleteRemoteFile(item); }
-            catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the file."); }
-                    break;
-                case "Rename":
-            try { await RenameRemoteFile(item); }
-            catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the file."); }
-                    break;
-            }
+            // Show file actions
+            await ShowRemoteFileActionsAsync(item);
         }
     }
 
-    [RelayCommand]
-    private async Task NavigateLocal(FileSystemInfo fsi)
+    private async Task NavigateLocalAsync(FileSystemInfo item)
     {
-        if (fsi is DirectoryInfo d)
-        {
-            try { LocalPath = d.FullName; RefreshLocal(); }
-            catch (Exception ex) { AppendOutput($"Open failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Open", "Could not open the item."); }
-            return;
-        }
-
-        // local file actions
-        var choice = await _dialogs.DisplayActionSheetAsync(fsi.Name, "Cancel", null, "Open", "Upload", "Delete", "Rename");
-        switch (choice)
-        {
-            case "Open":
-                // For files, Open could be a no-op or platform open; here we do nothing
-                break;
-            case "Upload":
-                if (fsi is FileInfo fi)
-                {
-                    try { await UploadLocalFile(fi); }
-                    catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Upload", "Could not upload the file."); }
-                }
-                break;
-            case "Delete":
-                try { await ConfirmAndDeleteLocalAsync(fsi); }
-                catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
-                break;
-            case "Rename":
-                try { await RenameLocalAsync(fsi); }
-                catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the item."); }
-                break;
-        }
-    }
-
-    [RelayCommand]
-    private async Task GoBackRemoteAsync()
-    {
-        var parent = PathHelpers.ParentUnix(RemotePath);
-        if (parent != RemotePath)
+        if (item is DirectoryInfo directory)
         {
             try
             {
-                await _ssh.ChangeDirectoryAsync(parent);
-                RemotePath = parent;
-                await RefreshRemoteAsync();
+                await _fileExplorerService.RefreshLocalAsync(directory.FullName);
             }
             catch (Exception ex)
             {
-                AppendOutput($"Open folder failed: {ex.Message}\n");
-                await _dialogs.DisplayMessageAsync("Open Folder", $"Could not open the folder: {ex.Message}");
+                await _terminalService.AppendOutputAsync($"Local navigation failed: {ex.Message}\n");
+                await _dialogService.DisplayMessageAsync("Navigation Error", $"Could not open folder: {ex.Message}");
             }
         }
-    }
-
-    [RelayCommand]
-    private void GoBackLocal()
-    {
-        var parent = Directory.GetParent(LocalPath)?.FullName;
-        if (!string.IsNullOrEmpty(parent)) { LocalPath = parent; RefreshLocal(); }
-    }
-
-    [RelayCommand]
-    private async Task DownloadSelectedAsync()
-    {
-        var item = SelectedRemoteItem; if (item is null || item.IsDirectory) return;
-    var dest = Path.Combine(LocalPath, item.Name);
-        IsBusy = true;
-    try { await _ssh.DownloadFileAsync(PathHelpers.CombineUnix(RemotePath, item.Name), dest); AppendOutput($"Downloaded {item.Name}\n"); RefreshLocal(); }
-    catch (Exception ex) { AppendOutput($"Download failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Download", "Could not download the file."); }
-        finally { IsBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task UploadSelectedAsync()
-    {
-        var item = SelectedLocalItem as FileInfo; if (item is null) return;
-    var dest = PathHelpers.CombineUnix(RemotePath, item.Name);
-        IsBusy = true;
-        try { await _ssh.UploadFileAsync(item.FullName, dest); AppendOutput($"Uploaded {item.Name}\n"); await RefreshRemoteAsync(); }
-    catch (Exception ex) { AppendOutput($"Upload failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Upload", "Could not upload the file."); }
-        finally { IsBusy = false; }
-    }
-
-    private async Task ExecuteRemoteFile(SftpFile file)
-    {
-    var ok = await _dialogs.DisplayAlertAsync("Execute", $"Execute {file.Name}?", "OK", "Cancel");
-        if (!ok) return;
-    await ExecuteCommandWithConfirm($"chmod +x '{PathHelpers.CombineUnix(RemotePath, file.Name)}' && '{PathHelpers.CombineUnix(RemotePath, file.Name)}'");
-    }
-
-    private async Task DownloadRemoteFile(SftpFile file)
-    {
-        SelectedRemoteItem = file; await DownloadSelectedAsync();
-    }
-
-    private async Task DeleteRemoteFile(SftpFile file)
-    {
-        if (!_ssh.IsConnected) return;
-    var ok = await _dialogs.DisplayAlertAsync("Delete", $"Delete {file.Name}?", "OK", "Cancel");
-        if (!ok) return;
-    try { await _ssh.ExecuteCommandAsync($"rm -f '{PathHelpers.CombineUnix(RemotePath, file.Name)}'"); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); }
-    }
-
-    private async Task RenameRemoteFile(SftpFile file)
-    {
-    var n = await _dialogs.DisplayPromptAsync("Rename", "New name:", initialValue: file.Name);
-        if (string.IsNullOrWhiteSpace(n) || n == file.Name) return;
-    try { await _ssh.ExecuteCommandAsync($"mv '{PathHelpers.CombineUnix(RemotePath, file.Name)}' '{PathHelpers.CombineUnix(RemotePath, n)}'"); await RefreshRemoteAsync(); }
-        catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); }
-    }
-
-    private async Task UploadLocalFile(FileInfo file)
-    {
-        SelectedLocalItem = file; await UploadSelectedAsync();
-    }
-
-    private async Task ExecuteCommandWithConfirm(string cmd)
-    {
-    var ok = await _dialogs.DisplayAlertAsync("Confirm", cmd, "OK", "Cancel");
-        if (!ok) return;
-        var result = await _ssh.ExecuteCommandAsync(cmd);
-        AppendOutput(result + "\n");
-    }
-
-    [RelayCommand]
-    private async Task ShowRemoteActionsAsync(SftpFile item)
-    {
-        if (item is null) return;
-        var isDir = item.IsDirectory;
-        var list = isDir
-            ? new[] { "Open", "Copy", "Move", "Delete", "Rename" }
-            : new[] { "Execute", "Download", "Copy", "Move", "Delete", "Rename" };
-        var choice = await _dialogs.DisplayActionSheetAsync(item.Name, "Close", null, list);
-        switch (choice)
+        else
         {
-            case "Open" when isDir:
-                await OpenRemoteFolderAsync(item);
-                break;
-            case "Execute" when !isDir:
-                await ExecuteRemoteFile(item);
-                break;
-            case "Download" when !isDir:
-                await DownloadRemoteFile(item);
-                break;
-            case "Delete":
-                await ConfirmAndDeleteRemoteAsync(item);
-                break;
-            case "Rename":
-                await RenameRemoteFile(item);
-                break;
-            case "Copy":
-                await CopyRemoteAsync(item);
-                break;
-            case "Move":
-                await MoveRemoteAsync(item);
-                break;
+            // Show local file actions
+            await ShowLocalFileActionsAsync(item);
         }
     }
 
-    [RelayCommand]
-    private async Task ShowLocalActionsAsync(FileSystemInfo fsi)
+    private async Task GoBackRemoteAsync()
     {
-        if (fsi is null) return;
-        var list = new[] { "Open", "Copy", "Move", "Delete", "Rename", "Upload" };
-        var choice = await _dialogs.DisplayActionSheetAsync(fsi.Name, "Close", null, list);
-        switch (choice)
-        {
-            case "Open":
-                if (fsi is DirectoryInfo d) { LocalPath = d.FullName; RefreshLocal(); }
-                break;
-            case "Upload":
-                if (fsi is FileInfo fi) await UploadLocalFile(fi);
-                break;
-            case "Delete":
-                await ConfirmAndDeleteLocalAsync(fsi);
-                break;
-            case "Rename":
-                await RenameLocalAsync(fsi);
-                break;
-            case "Copy":
-                await CopyLocalAsync(fsi);
-                break;
-            case "Move":
-                await MoveLocalAsync(fsi);
-                break;
-        }
-    }
-
-    private async Task ConfirmAndDeleteRemoteAsync(SftpFile item)
-    {
-        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"Delete {(item.IsDirectory ? "folder" : "file")} {item.Name}?", "OK", "Cancel");
-        if (!ok) return;
-    var path = PathHelpers.CombineUnix(RemotePath, item.Name);
-        var cmd = item.IsDirectory ? $"rm -rf '{path}'" : $"rm -f '{path}'";
-    try { await _ssh.ExecuteCommandAsync(cmd); await RefreshRemoteAsync(); }
-    catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
-    }
-
-    private async Task CopyRemoteAsync(SftpFile item)
-    {
-    var src = PathHelpers.CombineUnix(RemotePath, item.Name);
-        var dest = await _dialogs.DisplayPromptAsync("Copy", "Destination path:", "OK", "Cancel", initialValue: src);
-        if (string.IsNullOrWhiteSpace(dest)) return;
-        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"cp -r '{src}' '{dest}'?", "OK", "Cancel");
-        if (!ok) return;
-    try { await _ssh.ExecuteCommandAsync($"cp -r '{src}' '{dest}'"); await RefreshRemoteAsync(); }
-    catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Copy", "Could not copy the item."); }
-    }
-
-    private async Task MoveRemoteAsync(SftpFile item)
-    {
-    var src = PathHelpers.CombineUnix(RemotePath, item.Name);
-        var dest = await _dialogs.DisplayPromptAsync("Move", "Destination path:", "OK", "Cancel", initialValue: src);
-        if (string.IsNullOrWhiteSpace(dest) || dest == src) return;
-        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"mv '{src}' '{dest}'?", "OK", "Cancel");
-        if (!ok) return;
-    try { await _ssh.ExecuteCommandAsync($"mv '{src}' '{dest}'"); await RefreshRemoteAsync(); }
-    catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Move", "Could not move the item."); }
-    }
-
-    private async Task ConfirmAndDeleteLocalAsync(FileSystemInfo fsi)
-    {
-        var ok = await _dialogs.DisplayAlertAsync("Confirm", $"Delete {(fsi is DirectoryInfo ? "folder" : "file")} {fsi.Name}?", "OK", "Cancel");
-        if (!ok) return;
         try
         {
-            if (fsi is DirectoryInfo dd) dd.Delete(true); else File.Delete(fsi.FullName);
-            RefreshLocal();
+            var parentPath = PathHelpers.ParentUnix(SshState.RemotePath);
+            if (parentPath != SshState.RemotePath)
+            {
+                await _sshService.ChangeDirectoryAsync(parentPath);
+                await RefreshRemoteAsync();
+            }
         }
-    catch (Exception ex) { AppendOutput($"Delete failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Delete", "Could not delete the item."); }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Navigation failed: {ex.Message}\n");
+        }
     }
 
-    private async Task RenameLocalAsync(FileSystemInfo fsi)
+    private async Task GoBackLocalAsync()
     {
-        var n = await _dialogs.DisplayPromptAsync("Rename", "New name:", initialValue: fsi.Name);
-        if (string.IsNullOrWhiteSpace(n) || n == fsi.Name) return;
         try
         {
-            var target = Path.Combine(Path.GetDirectoryName(fsi.FullName)!, n);
-            if (fsi is DirectoryInfo)
-                Directory.Move(fsi.FullName, target);
+            var parent = Directory.GetParent(SshState.LocalPath)?.FullName;
+            if (!string.IsNullOrEmpty(parent))
+            {
+                await _fileExplorerService.RefreshLocalAsync(parent);
+            }
+        }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Navigation failed: {ex.Message}\n");
+        }
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        try
+        {
+            var current = Application.Current!.RequestedTheme;
+            
+            if (current == AppTheme.Dark)
+                await _themeService.SetThemeAsync(AppTheme.Light);
             else
-                File.Move(fsi.FullName, target, true);
-            RefreshLocal();
+                await _themeService.SetThemeAsync(AppTheme.Dark);
         }
-    catch (Exception ex) { AppendOutput($"Rename failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Rename", "Could not rename the item."); }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Theme change failed: {ex.Message}\n");
+        }
     }
 
-    private async Task CopyLocalAsync(FileSystemInfo fsi)
+    private async Task<Profile?> CreateProfileInteractiveAsync()
     {
-        var dest = await _dialogs.DisplayPromptAsync("Copy", "Destination path:", "OK", "Cancel", initialValue: fsi.FullName);
-        if (string.IsNullOrWhiteSpace(dest) || dest == fsi.FullName) return;
         try
         {
-            if (fsi is DirectoryInfo dd) CopyDirectoryRecursive(dd.FullName, dest);
-            else File.Copy(fsi.FullName, dest, true);
-            RefreshLocal();
+            var name = await _dialogService.DisplayPromptAsync("Create Profile", "Enter a profile name:", "OK", "Cancel", "Default");
+            if (string.IsNullOrWhiteSpace(name)) name = "Default";
+
+            var host = await _dialogService.DisplayPromptAsync("Create Profile", "Host name or IP:", "OK", "Cancel");
+            if (string.IsNullOrWhiteSpace(host)) return null;
+
+            var user = await _dialogService.DisplayPromptAsync("Create Profile", "Username:", "OK", "Cancel");
+            if (string.IsNullOrWhiteSpace(user)) user = Environment.UserName;
+
+            var portStr = await _dialogService.DisplayPromptAsync("Create Profile", "Port:", "OK", "Cancel", initialValue: "22");
+            var pass = await _dialogService.DisplayPromptAsync("Create Profile", "Password (leave blank if using key):", "OK", "Cancel");
+
+            return new Profile
+            {
+                Name = name!,
+                Host = host!,
+                Username = user!,
+                Password = string.IsNullOrEmpty(pass) ? null : pass,
+                Port = int.TryParse(portStr, out var portVal) ? portVal : 22
+            };
         }
-    catch (Exception ex) { AppendOutput($"Copy failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Copy", "Could not copy the item."); }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"Profile creation failed: {ex.Message}\n");
+            return null;
+        }
     }
 
-    private async Task MoveLocalAsync(FileSystemInfo fsi)
+    private async Task ShowRemoteFileActionsAsync(SftpFile file)
     {
-        var dest = await _dialogs.DisplayPromptAsync("Move", "Destination path:", "OK", "Cancel", initialValue: fsi.FullName);
-        if (string.IsNullOrWhiteSpace(dest) || dest == fsi.FullName) return;
         try
         {
-            if (fsi is DirectoryInfo)
-                Directory.Move(fsi.FullName, dest);
-            else
-                File.Move(fsi.FullName, dest, true);
-            RefreshLocal();
-        }
-    catch (Exception ex) { AppendOutput($"Move failed: {ex.Message}\n"); await _dialogs.DisplayMessageAsync("Move", "Could not move the item."); }
-    }
+            var actions = new[] { "Execute", "Download", "Delete", "Rename" };
+            var choice = await _dialogService.DisplayActionSheetAsync(file.Name, "Cancel", null, actions);
 
-    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
-    {
-        var src = new DirectoryInfo(sourceDir);
-        if (!src.Exists) return;
-        Directory.CreateDirectory(destDir);
-        foreach (var file in src.GetFiles())
+            switch (choice)
+            {
+                case "Execute":
+                    await ExecuteRemoteFileAsync(file);
+                    break;
+                case "Download":
+                    await DownloadRemoteFileAsync(file);
+                    break;
+                case "Delete":
+                    await DeleteRemoteFileAsync(file);
+                    break;
+                case "Rename":
+                    await RenameRemoteFileAsync(file);
+                    break;
+            }
+        }
+        catch (Exception ex)
         {
-            var target = Path.Combine(destDir, file.Name);
-            file.CopyTo(target, true);
+            await _terminalService.AppendOutputAsync($"File action failed: {ex.Message}\n");
         }
-        foreach (var dir in src.GetDirectories())
+    }
+
+    private async Task ShowLocalFileActionsAsync(FileSystemInfo file)
+    {
+        try
         {
-            CopyDirectoryRecursive(dir.FullName, Path.Combine(destDir, dir.Name));
+            var actions = new[] { "Upload", "Delete", "Rename" };
+            var choice = await _dialogService.DisplayActionSheetAsync(file.Name, "Cancel", null, actions);
+
+            switch (choice)
+            {
+                case "Upload":
+                    if (file is FileInfo fi)
+                        await UploadLocalFileAsync(fi);
+                    break;
+                case "Delete":
+                    await DeleteLocalFileAsync(file);
+                    break;
+                case "Rename":
+                    await RenameLocalFileAsync(file);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            await _terminalService.AppendOutputAsync($"File action failed: {ex.Message}\n");
         }
     }
 
-    private void AppendOutput(string text) => TerminalOutput += text;
-
-    partial void OnSelectedProfileChanged(Profile? value)
+    private async Task ExecuteRemoteFileAsync(SftpFile file)
     {
-        if (value is not null)
-            Preferences.Set(PrefKeys.LastProfileName, value.Name);
+        var ok = await _dialogService.DisplayAlertAsync("Execute", $"Execute {file.Name}?", "OK", "Cancel");
+        if (!ok) return;
+
+        var remotePath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        var command = $"chmod +x '{remotePath}' && '{remotePath}'";
+        await _terminalService.AppendOutputAsync($"> {command}\n");
+        
+        var result = await _sshService.ExecuteCommandAsync(command);
+        await _terminalService.AppendOutputAsync(result + "\n");
     }
 
-    partial void OnIsTerminalVisibleChanged(bool value)
+    private async Task DownloadRemoteFileAsync(SftpFile file)
     {
-        Preferences.Set(PrefKeys.IsTerminalVisible, value);
+        var remotePath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        var localPath = Path.Combine(SshState.LocalPath, file.Name);
+        
+        await _sshService.DownloadFileAsync(remotePath, localPath);
+        await _terminalService.AppendOutputAsync($"Downloaded {file.Name}\n");
+        await RefreshLocalAsync();
     }
 
-    partial void OnIsTerminalPinnedChanged(bool value)
+    private async Task UploadLocalFileAsync(FileInfo file)
     {
-        Preferences.Set(PrefKeys.IsTerminalPinned, value);
+        var localPath = file.FullName;
+        var remotePath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        
+        await _sshService.UploadFileAsync(localPath, remotePath);
+        await _terminalService.AppendOutputAsync($"Uploaded {file.Name}\n");
+        await RefreshRemoteAsync();
     }
 
-    partial void OnTerminalHeightChanged(double value)
+    private async Task DeleteRemoteFileAsync(SftpFile file)
     {
-        Preferences.Set(PrefKeys.TerminalHeight, value);
+        var ok = await _dialogService.DisplayAlertAsync("Delete", $"Delete {file.Name}?", "OK", "Cancel");
+        if (!ok) return;
+
+        var remotePath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        var command = file.IsDirectory ? $"rm -rf '{remotePath}'" : $"rm -f '{remotePath}'";
+        
+        await _sshService.ExecuteCommandAsync(command);
+        await _terminalService.AppendOutputAsync($"Deleted {file.Name}\n");
+        await RefreshRemoteAsync();
     }
 
-    partial void OnPaneSplitRatioChanged(double value)
+    private async Task DeleteLocalFileAsync(FileSystemInfo file)
     {
-        Preferences.Set(PrefKeys.PaneSplitRatio, Math.Clamp(value, 0.1, 0.9));
+        var ok = await _dialogService.DisplayAlertAsync("Delete", $"Delete {file.Name}?", "OK", "Cancel");
+        if (!ok) return;
+
+        if (file is DirectoryInfo dir)
+            dir.Delete(true);
+        else
+            File.Delete(file.FullName);
+
+        await _terminalService.AppendOutputAsync($"Deleted {file.Name}\n");
+        await RefreshLocalAsync();
     }
 
-    private static class PrefKeys
+    private async Task RenameRemoteFileAsync(SftpFile file)
     {
-        public const string LastProfileName = "LastProfileName";
-        public const string IsTerminalVisible = "IsTerminalVisible";
-        public const string IsTerminalPinned = "IsTerminalPinned";
-        public const string TerminalHeight = "TerminalHeight";
-        public const string PaneSplitRatio = "PaneSplitRatio";
+        var newName = await _dialogService.DisplayPromptAsync("Rename", "New name:", initialValue: file.Name);
+        if (string.IsNullOrWhiteSpace(newName) || newName == file.Name) return;
+
+        var oldPath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        var newPath = PathHelpers.CombineUnix(SshState.RemotePath, newName);
+        var command = $"mv '{oldPath}' '{newPath}'";
+
+        await _sshService.ExecuteCommandAsync(command);
+        await _terminalService.AppendOutputAsync($"Renamed {file.Name} to {newName}\n");
+        await RefreshRemoteAsync();
+    }
+
+    private async Task RenameLocalFileAsync(FileSystemInfo file)
+    {
+        var newName = await _dialogService.DisplayPromptAsync("Rename", "New name:", initialValue: file.Name);
+        if (string.IsNullOrWhiteSpace(newName) || newName == file.Name) return;
+
+        var newPath = Path.Combine(Path.GetDirectoryName(file.FullName)!, newName);
+        
+        if (file is DirectoryInfo)
+            Directory.Move(file.FullName, newPath);
+        else
+            File.Move(file.FullName, newPath, true);
+
+        await _terminalService.AppendOutputAsync($"Renamed {file.Name} to {newName}\n");
+        await RefreshLocalAsync();
     }
 }
