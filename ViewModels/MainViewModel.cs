@@ -15,6 +15,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly ITerminalService _terminalService;
     private readonly IThemeService _themeService;
     private readonly IDialogService _dialogService;
+    private readonly IUiInteractionService _uiInteractionService;
 
     public MainViewModel(
         ISshService sshService,
@@ -22,7 +23,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         IFileExplorerService fileExplorerService,
         ITerminalService terminalService,
         IThemeService themeService,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        IUiInteractionService uiInteractionService)
     {
         _sshService = sshService;
         _profileService = profileService;
@@ -30,12 +32,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _terminalService = terminalService;
         _themeService = themeService;
         _dialogService = dialogService;
+        _uiInteractionService = uiInteractionService;
 
         // Subscribe to state changes
         _sshService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SshState)));
         _profileService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProfileState)));
         _fileExplorerService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FileExplorerState)));
         _terminalService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TerminalState)));
+        _uiInteractionService.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UiInteractionState)));
 
         // Initialize commands
         LoadCommand = new AsyncBindingCommand(_ => LoadAsync(), _ => !ProfileState.IsBusy, this);
@@ -51,6 +55,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
         NavigateLocalCommand = new AsyncBindingCommand<FileSystemInfo>(item => NavigateLocalAsync(item!), _ => true, this);
         GoBackRemoteCommand = new AsyncBindingCommand(_ => GoBackRemoteAsync(), _ => SshState.IsConnected, this);
         GoBackLocalCommand = new AsyncBindingCommand(_ => GoBackLocalAsync(), _ => true, this);
+        
+        // UI Interaction Commands
+        StartRemoteDragCommand = new AsyncBindingCommand<SftpFile>(file => StartRemoteDragAsync(file!), _ => SshState.IsConnected, this);
+        StartLocalDragCommand = new AsyncBindingCommand<FileSystemInfo>(file => StartLocalDragAsync(file!), _ => true, this);
+        DropOnRemoteCommand = new AsyncBindingCommand(_ => DropOnRemoteAsync(), _ => !UiInteractionState.IsBusy, this);
+        DropOnLocalCommand = new AsyncBindingCommand(_ => DropOnLocalAsync(), _ => !UiInteractionState.IsBusy, this);
+        StartTerminalResizeCommand = new AsyncBindingCommand<double>(height => StartTerminalResizeAsync(height), _ => true, this);
+        UpdateTerminalHeightCommand = new AsyncBindingCommand<double>(deltaY => UpdateTerminalHeightAsync(deltaY), _ => UiInteractionState.TerminalResize.IsResizing, this);
+        EndTerminalResizeCommand = new AsyncBindingCommand(_ => EndTerminalResizeAsync(), _ => UiInteractionState.TerminalResize.IsResizing, this);
+        ShowCommandsCommand = new AsyncBindingCommand(_ => ShowCommandsAsync(), _ => true, this);
+        ShowAboutCommand = new AsyncBindingCommand(_ => _uiInteractionService.ShowAboutDialogAsync(), _ => true, this);
+        NavigateToOptionsCommand = new AsyncBindingCommand(_ => _uiInteractionService.NavigateToOptionsAsync(), _ => true, this);
+        RegisterKeyboardAcceleratorsCommand = new AsyncBindingCommand(_ => _uiInteractionService.RegisterKeyboardAcceleratorsAsync(), _ => true, this);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -60,6 +77,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ProfileState ProfileState => _profileService.State;
     public FileExplorerState FileExplorerState => _fileExplorerService.State;
     public TerminalState TerminalState => _terminalService.State;
+    public UiInteractionState UiInteractionState => _uiInteractionService.State;
 
     // Commands
     public ICommand LoadCommand { get; }
@@ -75,6 +93,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand NavigateLocalCommand { get; }
     public ICommand GoBackRemoteCommand { get; }
     public ICommand GoBackLocalCommand { get; }
+    
+    // UI Interaction Commands
+    public ICommand StartRemoteDragCommand { get; }
+    public ICommand StartLocalDragCommand { get; }
+    public ICommand DropOnRemoteCommand { get; }
+    public ICommand DropOnLocalCommand { get; }
+    public ICommand StartTerminalResizeCommand { get; }
+    public ICommand UpdateTerminalHeightCommand { get; }
+    public ICommand EndTerminalResizeCommand { get; }
+    public ICommand ShowCommandsCommand { get; }
+    public ICommand ShowAboutCommand { get; }
+    public ICommand NavigateToOptionsCommand { get; }
+    public ICommand RegisterKeyboardAcceleratorsCommand { get; }
 
     private async Task LoadAsync()
     {
@@ -490,5 +521,51 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         await _terminalService.AppendOutputAsync($"Renamed {file.Name} to {newName}\n");
         await RefreshLocalAsync();
+    }
+
+    // UI Interaction Methods
+    private async Task StartRemoteDragAsync(SftpFile file)
+    {
+        var remotePath = PathHelpers.CombineUnix(SshState.RemotePath, file.Name);
+        await _uiInteractionService.StartDragAsync(remotePath, file.Name, isRemoteSource: true);
+    }
+
+    private async Task StartLocalDragAsync(FileSystemInfo file)
+    {
+        await _uiInteractionService.StartDragAsync(file.FullName, file.Name, isRemoteSource: false);
+    }
+
+    private async Task DropOnRemoteAsync()
+    {
+        await _uiInteractionService.HandleDropAsync(isRemoteTarget: true);
+    }
+
+    private async Task DropOnLocalAsync()
+    {
+        await _uiInteractionService.HandleDropAsync(isRemoteTarget: false);
+    }
+
+    private async Task StartTerminalResizeAsync(double currentHeight)
+    {
+        await _uiInteractionService.StartTerminalResizeAsync(currentHeight);
+    }
+
+    private async Task UpdateTerminalHeightAsync(double deltaY)
+    {
+        await _uiInteractionService.UpdateTerminalHeightAsync(deltaY);
+    }
+
+    private async Task EndTerminalResizeAsync()
+    {
+        await _uiInteractionService.EndTerminalResizeAsync();
+    }
+
+    private async Task ShowCommandsAsync()
+    {
+        var command = await _uiInteractionService.ShowCommandsActionSheetAsync();
+        if (!string.IsNullOrEmpty(command))
+        {
+            await ExecuteCommandAsync(command);
+        }
     }
 }

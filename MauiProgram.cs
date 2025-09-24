@@ -29,6 +29,7 @@ public static class MauiProgram
 		// UI Services
 		builder.Services.AddSingleton<IThemeService, ThemeService>();
 		builder.Services.AddSingleton<IDialogService, DialogService>();
+		builder.Services.AddSingleton<IUiInteractionService, UiInteractionService>();
 		
 		// ViewModels & Views
 		builder.Services.AddSingleton<MainViewModel>();
