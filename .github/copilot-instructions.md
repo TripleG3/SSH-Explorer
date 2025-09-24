@@ -11,30 +11,45 @@ public readonly record struct LocationState(bool IsBusy, double Latitude, double
     public static readonly LocationState Empty = new(false, 0, 0, string.Empty);
 }
 
-public interface IStatePublisher<T>
+public interface IStatePublisher<TState>
 {
-    event Action<T> StateChanged;
-    T State { get; }
+    event Action<TState> StateChanged;
+    TState State { get; }
 }
 
 public interface ILocationService : IStatePublisher<LocationState>
 {
-    Task RefreshAsync(CancellationToken ct = default);
+    Task RefreshAsync(CancellationToken ct);
 }
 
-public sealed class LocationService(ILocationProvider provider) : StatePublisher<LocationState>(LocationState.Empty), ILocationService
+//ILocationProvider is an abstraction over platform specific location services and not included in this example.
+public sealed class LocationService(ILocationProvider provider) : IStatePublisher<LocationState>, ILocationService
 {
-    public async Task RefreshAsync(CancellationToken ct = default)
+    public event Action<LocationState> StateChanged = delegate { };
+    private LocationState _state = LocationState.Empty;
+    public LocationState State
     {
-        SetState(State with { IsBusy = true, ErrorMessage = string.Empty });
+        get => _state;
+        private set
+        {
+            if (!EqualityComparer<LocationState>.Default.Equals(_state, value))
+            {
+                _state = value;
+                StateChanged(_state);
+            }
+        }
+    }
+    public async Task RefreshAsync(CancellationToken ct)
+    {
+        State = State with { IsBusy = true, ErrorMessage = string.Empty };
         try
         {
             var loc = await provider.TryGetLocationAsync(ct);
-            SetState(State with { IsBusy = false, Latitude = loc.Latitude, Longitude = loc.Longitude, ErrorMessage = loc == Location.Empty ? "Location unavailable" : string.Empty });
+            State = State with { IsBusy = false, Latitude = loc.Latitude, Longitude = loc.Longitude, ErrorMessage = loc == LocationState.Empty ? "Location unavailable" : string.Empty };
         }
         catch (Exception ex)
         {
-            SetState(State with { IsBusy = false, ErrorMessage = ex.Message });
+            State = State with { IsBusy = false, ErrorMessage = ex.Message };
         }
     }
 }
@@ -45,16 +60,28 @@ public sealed class LocationService(ILocationProvider provider) : StatePublisher
 ```csharp
 public sealed class LocationViewModel : INotifyPropertyChanged
 {
+    private CancellationTokenSource? _cts;
     private readonly ILocationService _service;
     public LocationViewModel(ILocationService service)
     {
         _service = service;
         service.StateChanged += _ => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(State)));
-        RefreshCommand = new AsyncBindingCommand(_ => _service.RefreshAsync(), _ => !State.IsBusy, this);
+        RefreshCommand = new BindingCommand(_ => Refresh(), _ => !State.IsBusy, this);
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public LocationState State => _service.State;
     public ICommand RefreshCommand { get; }
+    public ICommand CancelRefreshCommand => new BindingCommand(_ => _cts?.Cancel(), _ => State.IsBusy, this);
+    private async void Refresh()
+    {
+        if (_cts is not null)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+        }
+        _cts = new CancellationTokenSource();
+        await _service.RefreshAsync(_cts.Token);
+    }
 }
 ```
 
@@ -69,7 +96,7 @@ public sealed class LocationViewModel : INotifyPropertyChanged
         <Label Text="{Binding State.Latitude, StringFormat='Latitude: {0:F6}'}" FontSize="Medium" />
         <Label Text="{Binding State.Longitude, StringFormat='Longitude: {0:F6}'}" FontSize="Medium" />
         <Label Text="{Binding State.ErrorMessage}" TextColor="Red" FontSize="Small" />
-        <Button Text="Get Current Location" Command="{Binding GetLocationCommand}" />
+        <Button Text="Get Current Location" Command="{Binding RefreshCommand}" />
         <ActivityIndicator IsRunning="{Binding State.IsBusy}" IsVisible="{Binding State.IsBusy}" />
     </StackLayout>
 </ContentView>
