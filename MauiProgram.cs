@@ -1,8 +1,8 @@
 ﻿using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
-using SSHExplorer.Services;
+using SSHExplorer.Models.Services;
 using SSHExplorer.ViewModels;
-using SSHExplorer.Views;
+using SSHExplorer.Pages;
 
 namespace SSHExplorer;
 
@@ -25,6 +25,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IProfileService, ProfileService>();
 		builder.Services.AddSingleton<IFileExplorerService, FileExplorerService>();
 		builder.Services.AddSingleton<ITerminalService, TerminalService>();
+		builder.Services.AddSingleton<ISessionService, SessionService>();
+		builder.Services.AddSingleton<ITextEditorService, TextEditorService>();
 		
 		// UI Services
 		builder.Services.AddSingleton<IThemeService, ThemeService>();
@@ -33,6 +35,9 @@ public static class MauiProgram
 		
 		// ViewModels & Views
 		builder.Services.AddSingleton<MainViewModel>();
+		builder.Services.AddTransient<SessionTabViewModel>();
+		builder.Services.AddTransient<SessionViewModel>();
+		builder.Services.AddSingleton<SshConnectionToolbarViewModel>();
 		builder.Services.AddSingleton<MainPage>();
 		builder.Services.AddTransient<OptionsViewModel>();
 		builder.Services.AddTransient<OptionsPage>();

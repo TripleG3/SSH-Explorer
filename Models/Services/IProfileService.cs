@@ -1,6 +1,6 @@
 using SSHExplorer.Models;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public interface IProfileService : IStatePublisher<ProfileState>
 {

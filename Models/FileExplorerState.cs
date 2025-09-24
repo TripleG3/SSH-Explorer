@@ -9,6 +9,8 @@ public readonly record struct FileExplorerState(
     ObservableCollection<FileSystemInfo> LocalItems,
     SftpFile? SelectedRemoteItem,
     FileSystemInfo? SelectedLocalItem,
+    string LocalPath,
+    string RemotePath,
     string ErrorMessage)
 {
     public static readonly FileExplorerState Empty = new(
@@ -17,5 +19,7 @@ public readonly record struct FileExplorerState(
         new ObservableCollection<FileSystemInfo>(),
         null,
         null,
+        string.Empty,
+        "/",
         string.Empty);
 }

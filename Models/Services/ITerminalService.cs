@@ -1,6 +1,6 @@
 using SSHExplorer.Models;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public interface ITerminalService : IStatePublisher<TerminalState>
 {
@@ -11,4 +11,6 @@ public interface ITerminalService : IStatePublisher<TerminalState>
     Task TogglePinAsync(CancellationToken ct = default);
     Task SetHeightAsync(double height, CancellationToken ct = default);
     Task SetPaneSplitRatioAsync(double ratio, CancellationToken ct = default);
+    Task ExecuteLocalCommandAsync(string command, CancellationToken ct = default);
+    Task ExecuteRemoteCommandAsync(string command, CancellationToken ct = default);
 }

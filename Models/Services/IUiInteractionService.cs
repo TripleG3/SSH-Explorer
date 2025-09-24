@@ -1,6 +1,6 @@
 using SSHExplorer.Models;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 /// <summary>
 /// Service for handling UI-specific interactions like drag/drop, terminal resize, and keyboard shortcuts

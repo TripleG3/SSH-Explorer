@@ -1,4 +1,4 @@
-﻿using SSHExplorer.Views;
+﻿using SSHExplorer.Pages;
 
 namespace SSHExplorer;
 

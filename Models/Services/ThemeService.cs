@@ -1,4 +1,4 @@
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class ThemeService : IThemeService
 {

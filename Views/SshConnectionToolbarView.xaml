@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SSHExplorer.ViewModels"
+             x:Class="SSHExplorer.Views.SshConnectionToolbarView"
+             x:DataType="vm:SshConnectionToolbarViewModel">
+    <HorizontalStackLayout Padding="8"
+            Spacing="8"
+            BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}">
+        <Picker Title="Profile"
+                ItemsSource="{Binding State.ProfileState.Profiles}"
+                ItemDisplayBinding="{Binding Name}"
+                SelectedItem="{Binding State.ProfileState.SelectedProfile}"
+                WidthRequest="250"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+        <Button Text="Connect"
+                Command="{Binding ConnectCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonPrimary}, Dark={StaticResource GitHubDark_ButtonPrimary}}"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonText}, Dark={StaticResource GitHubDark_ButtonText}}"/>
+        <!-- Connection status indicator (visible only when connected). Click to disconnect with confirmation. -->
+        <Button Text="● Connected"
+                TextColor="Lime"
+                BackgroundColor="Transparent"
+                BorderColor="Lime"
+                BorderWidth="1"
+                IsVisible="{Binding State.SshState.IsConnected}"
+                Command="{Binding DisconnectCommand}"/>
+        <Button Text="Terminal"
+                Command="{Binding ToggleTerminalCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+        <Button Text="Commands"
+                Command="{Binding ShowCommandsCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+        <Button Text="Options"
+                Command="{Binding NavigateToOptionsCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+        <Button Text="About"
+                Command="{Binding ShowAboutCommand}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
+                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
+    </HorizontalStackLayout>
+</ContentView>

@@ -3,7 +3,7 @@ using Renci.SshNet.Common;
 using Renci.SshNet.Sftp;
 using SSHExplorer.Models;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class SshService : StatePublisher<SshConnectionState>, ISshService
 {
@@ -60,7 +60,7 @@ public sealed class SshService : StatePublisher<SshConnectionState>, ISshService
         }
     }
 
-    public async Task DisconnectAsync()
+    public async Task DisconnectAsync(CancellationToken ct = default)
     {
         SetState(State with { IsBusy = true });
         

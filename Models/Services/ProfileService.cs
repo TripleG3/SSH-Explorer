@@ -2,7 +2,7 @@ using System.Text.Json;
 using SSHExplorer.Models;
 using System.Collections.ObjectModel;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class ProfileService : StatePublisher<ProfileState>, IProfileService
 {
@@ -112,9 +112,9 @@ public sealed class ProfileService : StatePublisher<ProfileState>, IProfileServi
         await Task.Run(() => 
         {
             SetState(State with { SelectedProfile = profile });
-            if (profile is not null)
+            if (profile.HasValue)
             {
-                Preferences.Set("LastProfileName", profile.Name);
+                Preferences.Set("LastProfileName", profile.Value.Name);
             }
         }, ct);
     }

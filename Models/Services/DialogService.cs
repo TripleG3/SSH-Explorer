@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class DialogService : IDialogService
 {

@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public interface IDialogService
 {

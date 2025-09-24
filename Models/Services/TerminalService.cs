@@ -1,6 +1,6 @@
 using SSHExplorer.Models;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class TerminalService : StatePublisher<TerminalState>, ITerminalService
 {
@@ -79,5 +79,70 @@ public sealed class TerminalService : StatePublisher<TerminalState>, ITerminalSe
             SetState(State with { PaneSplitRatio = clampedRatio });
             Preferences.Set("PaneSplitRatio", clampedRatio);
         }, ct);
+    }
+
+    public async Task ExecuteLocalCommandAsync(string command, CancellationToken ct = default)
+    {
+        SetState(State with { IsBusy = true });
+        
+        try
+        {
+            await AppendOutputAsync($"> {command}\n", ct);
+            
+            // Execute local command (simple implementation)
+            var processInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c {command}",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processInfo);
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync(ct);
+                var error = await process.StandardError.ReadToEndAsync(ct);
+                await process.WaitForExitAsync(ct);
+
+                if (!string.IsNullOrEmpty(output))
+                    await AppendOutputAsync(output, ct);
+                if (!string.IsNullOrEmpty(error))
+                    await AppendOutputAsync($"Error: {error}", ct);
+            }
+            
+            await SetInputAsync(string.Empty, ct);
+        }
+        catch (Exception ex)
+        {
+            await AppendOutputAsync($"Error executing command: {ex.Message}\n", ct);
+        }
+        finally
+        {
+            SetState(State with { IsBusy = false });
+        }
+    }
+
+    public async Task ExecuteRemoteCommandAsync(string command, CancellationToken ct = default)
+    {
+        SetState(State with { IsBusy = true });
+        
+        try
+        {
+            await AppendOutputAsync($"> {command}\n", ct);
+            // Note: This would need SSH service integration for actual remote execution
+            await AppendOutputAsync("Remote command execution not yet implemented\n", ct);
+            await SetInputAsync(string.Empty, ct);
+        }
+        catch (Exception ex)
+        {
+            await AppendOutputAsync($"Error executing remote command: {ex.Message}\n", ct);
+        }
+        finally
+        {
+            SetState(State with { IsBusy = false });
+        }
     }
 }

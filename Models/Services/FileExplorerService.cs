@@ -2,7 +2,7 @@ using SSHExplorer.Models;
 using Renci.SshNet.Sftp;
 using System.Collections.ObjectModel;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 public sealed class FileExplorerService : StatePublisher<FileExplorerState>, IFileExplorerService
 {
@@ -80,5 +80,17 @@ public sealed class FileExplorerService : StatePublisher<FileExplorerState>, IFi
     {
         await Task.CompletedTask; // Make it properly async
         SetState(State with { SelectedLocalItem = item });
+    }
+
+    public async Task NavigateToLocalAsync(string localPath, CancellationToken ct = default)
+    {
+        SetState(State with { LocalPath = localPath });
+        await RefreshLocalAsync(localPath, ct);
+    }
+
+    public async Task NavigateToRemoteAsync(string remotePath, CancellationToken ct = default)
+    {
+        SetState(State with { RemotePath = remotePath });
+        await RefreshRemoteAsync(remotePath, ct);
     }
 }

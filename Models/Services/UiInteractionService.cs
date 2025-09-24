@@ -1,7 +1,7 @@
 using SSHExplorer.Models;
 using Microsoft.Maui.ApplicationModel;
 
-namespace SSHExplorer.Services;
+namespace SSHExplorer.Models.Services;
 
 /// <summary>
 /// Service for handling UI-specific interactions following CIS pattern

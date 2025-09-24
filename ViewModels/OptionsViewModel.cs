@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Windows.Input;
-using SSHExplorer.Services;
+using SSHExplorer.Models.Services;
 
 namespace SSHExplorer.ViewModels;
 

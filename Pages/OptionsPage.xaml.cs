@@ -1,6 +1,6 @@
 using SSHExplorer.ViewModels;
 
-namespace SSHExplorer.Views;
+namespace SSHExplorer.Pages;
 
 public partial class OptionsPage : ContentPage
 {
