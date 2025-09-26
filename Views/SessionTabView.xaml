@@ -10,19 +10,19 @@
     <Grid RowDefinitions="Auto,*">
         <!-- Tab Bar -->
         <Grid Grid.Row="0"
-                ColumnDefinitions="*,Auto"
+              ColumnDefinitions="*,Auto"
               BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}"
               Padding="8,4">
 
             <!-- Session Tabs -->
             <ScrollView Grid.Column="0"
-                    Orientation="Horizontal">
+                        Orientation="Horizontal">
                 <CollectionView ItemsSource="{Binding SessionState.Sessions}"
                                 ItemsLayout="HorizontalList">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:Session">
                             <Grid Padding="12,6"
-                                    Margin="2,0">
+                                  Margin="2,0">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionTabViewModel}}, Path=SetActiveSessionCommand}"
                                                           CommandParameter="{Binding Id}"/>
@@ -61,7 +61,7 @@
 
             <!-- New Session Buttons -->
             <HorizontalStackLayout Grid.Column="1"
-                    Spacing="4">
+                                   Spacing="4">
                 <Button Text="+ Local"
                         Command="{Binding CreateLocalSessionCommand}"
                         FontSize="12"
@@ -87,8 +87,8 @@
                   BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
 
                 <StackLayout VerticalOptions="Center"
-                        HorizontalOptions="Center"
-                        Spacing="20">
+                             HorizontalOptions="Center"
+                             Spacing="20">
                     <Label Text="Welcome to SSH Explorer"
                            FontSize="24"
                            FontAttributes="Bold"
@@ -101,7 +101,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextSecondary}, Dark={StaticResource GitHubDark_TextSecondary}}"/>
 
                     <Grid ColumnDefinitions="*,Auto"
-                            WidthRequest="300">
+                          WidthRequest="300">
                         <Picker Grid.Column="0"
                                 Title="Select Profile"
                                 ItemsSource="{Binding ProfileState.Profiles}"
@@ -111,7 +111,7 @@
                     </Grid>
 
                     <HorizontalStackLayout Spacing="10"
-                            HorizontalOptions="Center">
+                                           HorizontalOptions="Center">
                         <Button Text="Create Local Session"
                                 Command="{Binding CreateLocalSessionCommand}"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonPrimary}, Dark={StaticResource GitHubDark_ButtonPrimary}}"
