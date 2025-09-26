@@ -1,5 +1,4 @@
-﻿using Microsoft.Maui.ApplicationModel;
-using Renci.SshNet.Common;
+﻿using Renci.SshNet.Common;
 using SSHExplorer.Models.Services;
 
 namespace SSHExplorer;

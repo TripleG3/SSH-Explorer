@@ -1,4 +1,3 @@
-using SSHExplorer.Models;
 using Renci.SshNet.Sftp;
 using System.Collections.ObjectModel;
 

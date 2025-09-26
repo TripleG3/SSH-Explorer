@@ -1,5 +1,3 @@
-using SSHExplorer.Models;
-
 namespace SSHExplorer.Models.Services;
 
 public interface ITerminalService : IStatePublisher<TerminalState>

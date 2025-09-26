@@ -6,41 +6,44 @@
              xmlns:models="clr-namespace:SSHExplorer.Models"
              x:Class="SSHExplorer.Views.SessionTabView"
              x:DataType="vm:SessionTabViewModel">
-    
+
     <Grid RowDefinitions="Auto,*">
         <!-- Tab Bar -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" 
+        <Grid Grid.Row="0"
+                ColumnDefinitions="*,Auto"
               BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Surface}, Dark={StaticResource GitHubDark_Surface}}"
               Padding="8,4">
-            
+
             <!-- Session Tabs -->
-            <ScrollView Grid.Column="0" Orientation="Horizontal">
+            <ScrollView Grid.Column="0"
+                    Orientation="Horizontal">
                 <CollectionView ItemsSource="{Binding SessionState.Sessions}"
                                 ItemsLayout="HorizontalList">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:Session">
-                            <Grid Padding="12,6" Margin="2,0">
+                            <Grid Padding="12,6"
+                                    Margin="2,0">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionTabViewModel}}, Path=SetActiveSessionCommand}"
                                                           CommandParameter="{Binding Id}"/>
                                 </Grid.GestureRecognizers>
-                                
+
                                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}"
                                         StrokeThickness="1"
                                         Stroke="{AppThemeBinding Light={StaticResource GitHubLight_Border}, Dark={StaticResource GitHubDark_Border}}"
                                         StrokeShape="RoundRectangle 4,4,0,0"
                                         Padding="8,4">
-                                    
+
                                     <HorizontalStackLayout Spacing="6">
                                         <!-- Connection indicator -->
                                         <Ellipse Fill="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}, ConverterParameter='Lime,Gray'}"
                                                  WidthRequest="8"
                                                  HeightRequest="8"/>
-                                        
+
                                         <Label Text="{Binding Name}"
                                                FontSize="14"
                                                TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
-                                        
+
                                         <Button Text="✕"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionTabViewModel}}, Path=CloseSessionCommand}"
                                                 CommandParameter="{Binding Id}"
@@ -55,16 +58,17 @@
                     </CollectionView.ItemTemplate>
                 </CollectionView>
             </ScrollView>
-            
+
             <!-- New Session Buttons -->
-            <HorizontalStackLayout Grid.Column="1" Spacing="4">
+            <HorizontalStackLayout Grid.Column="1"
+                    Spacing="4">
                 <Button Text="+ Local"
                         Command="{Binding CreateLocalSessionCommand}"
                         FontSize="12"
                         Padding="8,4"
                         BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonSecondary}, Dark={StaticResource GitHubDark_ButtonSecondary}}"
                         TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
-                
+
                 <Button Text="+ SSH"
                         Command="{Binding CreateSshSessionCommand}"
                         IsEnabled="{Binding ProfileState.SelectedProfile, Converter={StaticResource NullableToBoolConverter}}"
@@ -74,27 +78,30 @@
                         TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
             </HorizontalStackLayout>
         </Grid>
-        
+
         <!-- Active Session Content -->
         <Grid Grid.Row="1">
             <!-- Profile Selection (when no active session) -->
             <Grid IsVisible="{Binding SessionState.ActiveSession, Converter={StaticResource NullToVisibilityConverter}}"
                   Padding="20"
                   BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_Background}, Dark={StaticResource GitHubDark_Background}}">
-                
-                <StackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="20">
+
+                <StackLayout VerticalOptions="Center"
+                        HorizontalOptions="Center"
+                        Spacing="20">
                     <Label Text="Welcome to SSH Explorer"
                            FontSize="24"
                            FontAttributes="Bold"
                            HorizontalOptions="Center"
                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
-                    
+
                     <Label Text="Select a profile and create a session to get started"
                            FontSize="16"
                            HorizontalOptions="Center"
                            TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextSecondary}, Dark={StaticResource GitHubDark_TextSecondary}}"/>
-                    
-                    <Grid ColumnDefinitions="*,Auto" WidthRequest="300">
+
+                    <Grid ColumnDefinitions="*,Auto"
+                            WidthRequest="300">
                         <Picker Grid.Column="0"
                                 Title="Select Profile"
                                 ItemsSource="{Binding ProfileState.Profiles}"
@@ -102,13 +109,14 @@
                                 SelectedItem="{Binding ProfileState.SelectedProfile}"
                                 TextColor="{AppThemeBinding Light={StaticResource GitHubLight_TextPrimary}, Dark={StaticResource GitHubDark_TextPrimary}}"/>
                     </Grid>
-                    
-                    <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
+
+                    <HorizontalStackLayout Spacing="10"
+                            HorizontalOptions="Center">
                         <Button Text="Create Local Session"
                                 Command="{Binding CreateLocalSessionCommand}"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonPrimary}, Dark={StaticResource GitHubDark_ButtonPrimary}}"
                                 TextColor="{AppThemeBinding Light={StaticResource GitHubLight_ButtonText}, Dark={StaticResource GitHubDark_ButtonText}}"/>
-                        
+
                         <Button Text="Create SSH Session"
                                 Command="{Binding CreateSshSessionCommand}"
                                 IsEnabled="{Binding ProfileState.SelectedProfile, Converter={StaticResource NullableToBoolConverter}}"
@@ -117,10 +125,10 @@
                     </HorizontalStackLayout>
                 </StackLayout>
             </Grid>
-            
+
             <!-- Active Session View -->
             <views:SessionView IsVisible="{Binding SessionState.ActiveSession, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Inverted}"
-                              BindingContext="{Binding SessionState.ActiveSession}"/>
+                               BindingContext="{Binding SessionState.ActiveSession}"/>
         </Grid>
     </Grid>
 </ContentView>
