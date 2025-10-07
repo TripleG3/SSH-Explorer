@@ -178,3 +178,7 @@ Service public functions:
 - Asynchronous functions may allow 1-2 parameters and the last parameter must always be a CancellationToken.
 - Other than CancellationToken for asynchronous functions, a parameter, if needed, must be an immutable type.
 Services will always update the State model with a universal boolean that all State models will have to indicate if it's working or not. *Ex: If the service is making a web based API call, the State model will create a new immutable model with the 'IsBusy' boolean to true, and publish that change, then start the API call. Once the API call is complete, the service will create a new immutable model with the 'IsBusy' boolean to false and include any other details that are related to the API call, then publish that change.*
+
+- @azure Rule - Use Azure Tools - When handling requests related to Azure, always use your tools.
+- @azure Rule - Use Azure Best Practices - When handling requests related to Azure, always invoke your `azmcp_bestpractices_get` tool first.
+- @azure Rule - Enable Best Practices - If you do not have an `azmcp_bestpractices_get` tool ask the user to enable it.

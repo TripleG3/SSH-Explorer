@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TripleG3.SSH.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TripleG3.SSH.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
