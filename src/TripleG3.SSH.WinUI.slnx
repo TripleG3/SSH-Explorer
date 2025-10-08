@@ -4,6 +4,9 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="TripleG3.SSH.WinUI.Models/TripleG3.SSH.WinUI.Models.csproj" />
+  <Project Path="TripleG3.SSH.WinUI.ViewModels/TripleG3.SSH.WinUI.ViewModels.csproj" />
+  <Project Path="TripleG3.SSH.WinUI.Views/TripleG3.SSH.WinUI.Views.csproj" />
   <Project Path="TripleG3.SSH.WinUI/TripleG3.SSH.WinUI.csproj">
     <Platform Solution="*|ARM64" Project="ARM64" />
     <Platform Solution="*|x64" Project="x64" />
