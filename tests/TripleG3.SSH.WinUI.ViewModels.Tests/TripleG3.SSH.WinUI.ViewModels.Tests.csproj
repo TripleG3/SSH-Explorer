@@ -9,7 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\src\TripleG3.SSH.WinUI.Models\TripleG3.SSH.WinUI.Models.csproj" />
+	  <ProjectReference Include="..\..\src\TripleG3.SSH.WinUI.ViewModels\TripleG3.SSH.WinUI.ViewModels.csproj" />
 	</ItemGroup>
-
+	
 </Project>

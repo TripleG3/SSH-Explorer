@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using TripleG3.SSH.WinUI.Models.SSH;
 
 namespace TripleG3.SSH.WinUI.Models.Tests.SSH;

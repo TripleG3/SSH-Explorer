@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using TripleG3.SSH.WinUI.Models.SSH;
 
 namespace TripleG3.SSH.WinUI.Models.Tests.SSH;
