@@ -6,26 +6,7 @@ using System.Threading.Tasks;
 
 namespace TripleG3.SSH.WinUI.Models.SSH;
 
-public interface IProcessWrapper : IDisposable
-{
-    event Action? Exited;
-    StreamReader StandardOutput { get; }
-    StreamReader StandardError { get; }
-    StreamWriter StandardInput { get; }
-    bool HasExited { get; }
-    int ExitCode { get; }
-    void Start();
-    Task WaitForExitAsync(CancellationToken cancellationToken = default);
-    void WaitForExit(int milliseconds);
-    void Kill(bool entireProcessTree);
-}
-
-public interface IProcessFactory
-{
-    IProcessWrapper Create(ProcessStartInfo startInfo, bool enableRaisingEvents = true);
-}
-
-internal sealed class SystemProcessWrapper : IProcessWrapper
+internal sealed partial class SystemProcessWrapper : IProcessWrapper
 {
     private readonly Process _proc;
 
@@ -57,13 +38,4 @@ internal sealed class SystemProcessWrapper : IProcessWrapper
     public void Kill(bool entireProcessTree) => _proc.Kill(entireProcessTree);
 
     public void Dispose() => _proc.Dispose();
-}
-
-public sealed class SystemProcessFactory : IProcessFactory
-{
-    public IProcessWrapper Create(ProcessStartInfo startInfo, bool enableRaisingEvents = true)
-    {
-        var p = new Process { StartInfo = startInfo, EnableRaisingEvents = enableRaisingEvents };
-        return new SystemProcessWrapper(p);
-    }
 }

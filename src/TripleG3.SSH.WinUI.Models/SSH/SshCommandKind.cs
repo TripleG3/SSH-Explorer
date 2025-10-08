@@ -1,6 +1,5 @@
 namespace TripleG3.SSH.WinUI.Models.SSH;
 
-// Common commands you can extend over time
 public enum SshCommandKind
 {
     // System

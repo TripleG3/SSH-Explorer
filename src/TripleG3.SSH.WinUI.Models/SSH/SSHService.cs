@@ -49,95 +49,113 @@ public class SSHService(ISshHistoryStore historyStore, IProcessFactory processFa
     public async ValueTask ConnectAsync(Profiles.Profile profile)
     {
         await semaphore.WaitAsync();
-        if (State.IsBusy)
-            throw new InvalidOperationException("SSHService is busy.");
-
-        if (!string.IsNullOrWhiteSpace(profile.Password))
-            throw new NotSupportedException("Password auth is not supported via the system ssh client. Configure key-based auth for the target host instead.");
-
-        State = State with { IsBusy = true };
-
-        if (State.IsConnected)
-        {
-            // Already connected to a host
-            State = State with { IsBusy = false };
-            semaphore.Release();
-            throw new InvalidOperationException("Already connected to a host. Disconnect first.");
-        }
-
+        IProcessWrapper? proc = null;
         try
         {
-            var psi = new ProcessStartInfo
+            if (State.IsBusy)
+                throw new InvalidOperationException("SSHService is busy.");
+
+            if (!string.IsNullOrWhiteSpace(profile.Password))
+                throw new NotSupportedException("Password auth is not supported via the system ssh client. Configure key-based auth for the target host instead.");
+
+            State = State with { IsBusy = true };
+
+            if (State.IsConnected)
             {
-                FileName = "ssh",
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                RedirectStandardInput = true, // allow sending commands
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            // Use -T (no TTY) so stdout/stderr remain separate for reliable parsing.
-            psi.ArgumentList.Add("-T");
-            psi.ArgumentList.Add("-o");
-            psi.ArgumentList.Add("BatchMode=yes");
-            psi.ArgumentList.Add("-o");
-            psi.ArgumentList.Add("StrictHostKeyChecking=accept-new");
-            psi.ArgumentList.Add("-p");
-            psi.ArgumentList.Add(profile.Port.ToString());
-            psi.ArgumentList.Add($"{profile.Username}@{profile.Address}");
-
-            var proc = processFactory.Create(psi, enableRaisingEvents: true);
-            proc.Exited += () =>
-            {
-                // When ssh exits (network drop, host closed, etc.), update state
-                State = State with { IsConnected = false, IsBusy = false };
-                proc.Dispose();
-                if (sshProcess == proc) sshProcess = null;
-            };
-
-            proc.Start();
-
-            // Give ssh a brief moment to fail fast if it cannot authenticate.
-            await Task.Delay(600);
-
-            if (proc.HasExited)
-            {
-                // Read any error output for diagnostics.
-                string err = await proc.StandardError.ReadToEndAsync();
-                throw new InvalidOperationException(
-                    $"ssh exited with code {proc.ExitCode}. Error: {err}".Trim());
+                // Already connected to a host
+                State = State with { IsBusy = false };
+                throw new InvalidOperationException("Already connected to a host. Disconnect first.");
             }
 
-            sshProcess = proc;
-            State = new SSHState(profile, true, false);
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "ssh",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardInput = true, // allow sending commands
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
 
-            // Start a fresh session history
-            lock (historyLock)
-            {
-                exchanges.Clear();
-                transcript.Clear();
-                currentSessionId = Guid.NewGuid();
-                sessionStartedAt = DateTimeOffset.UtcNow;
-                transcript.Add(new SshTimelineEntry(currentSessionId, sessionStartedAt, SshTimelineKind.Info, null, $"Connected to {profile.Username}@{profile.Address}:{profile.Port}"));
+                // Use -T (no TTY) so stdout/stderr remain separate for reliable parsing.
+                psi.ArgumentList.Add("-T");
+                psi.ArgumentList.Add("-o");
+                psi.ArgumentList.Add("BatchMode=yes");
+                psi.ArgumentList.Add("-o");
+                psi.ArgumentList.Add("StrictHostKeyChecking=accept-new");
+                psi.ArgumentList.Add("-p");
+                psi.ArgumentList.Add(profile.Port.ToString());
+                psi.ArgumentList.Add($"{profile.Username}@{profile.Address}");
+
+                proc = processFactory.Create(psi, enableRaisingEvents: true);
+                proc.Exited += () =>
+                {
+                    // When ssh exits (network drop, host closed, etc.), update state
+                    State = State with { IsConnected = false, IsBusy = false };
+                    proc.Dispose();
+                    if (sshProcess == proc) sshProcess = null;
+                };
+
+                proc.Start();
+
+                // Give ssh a brief moment to fail fast if it cannot authenticate.
+                await Task.Delay(600);
+
+                if (proc.HasExited)
+                {
+                    // Read any error output for diagnostics.
+                    string err = await proc.StandardError.ReadToEndAsync();
+                    throw new InvalidOperationException(
+                        $"ssh exited with code {proc.ExitCode}. Error: {err}".Trim());
+                }
+
+                // Success: assign to field now so catch/finally won't double dispose
+                sshProcess = proc;
+                proc = null; // Ownership transferred
+                State = new SSHState(profile, true, false);
+
+                // Start a fresh session history
+                lock (historyLock)
+                {
+                    exchanges.Clear();
+                    transcript.Clear();
+                    currentSessionId = Guid.NewGuid();
+                    sessionStartedAt = DateTimeOffset.UtcNow;
+                    transcript.Add(new SshTimelineEntry(currentSessionId, sessionStartedAt, SshTimelineKind.Info, null, $"Connected to {profile.Username}@{profile.Address}:{profile.Port}"));
+                }
             }
-        }
-        catch
-        {
-            // Revert busy state on failure
-            State = State with { IsBusy = false };
-            // Ensure process is cleaned up if it was started
-            if (sshProcess is { HasExited: false })
+            catch
             {
-                try { sshProcess.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                // Revert busy state on failure
+                State = State with { IsBusy = false };
+                throw;
             }
-            sshProcess?.Dispose();
-            sshProcess = null;
-            throw;
         }
         finally
         {
+            // Ensure any local proc created is disposed on error before assignment to field
+            if (proc is not null)
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                        proc.Kill(entireProcessTree: true);
+                }
+                catch { }
+                proc.Dispose();
+            }
+
+            // Ensure process field is cleaned up on failure
+            if (sshProcess is { HasExited: false } && !State.IsConnected)
+            {
+                try { sshProcess.Kill(entireProcessTree: true); } catch { }
+                sshProcess.Dispose();
+                sshProcess = null;
+            }
+
             semaphore.Release();
         }
     }
@@ -217,20 +235,17 @@ public class SSHService(ISshHistoryStore historyStore, IProcessFactory processFa
     public async ValueTask SendAsync(string command)
     {
         await semaphore.WaitAsync();
-        if (State.IsBusy)
-            throw new InvalidOperationException("SSHService is busy.");
-        if (!State.IsConnected || sshProcess is null || sshProcess.HasExited)
-        {
-            semaphore.Release();
-            throw new InvalidOperationException("Not connected to any host.");
-        }
-
         CancellationTokenSource? timeoutCts = null;
         var commandId = Guid.NewGuid();
         var startedAt = DateTimeOffset.UtcNow;
 
         try
         {
+            if (State.IsBusy)
+                throw new InvalidOperationException("SSHService is busy.");
+            if (!State.IsConnected || sshProcess is null || sshProcess.HasExited)
+                throw new InvalidOperationException("Not connected to any host.");
+
             State = State with { IsBusy = true };
 
             // Record "sent" in transcript

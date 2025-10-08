@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace TripleG3.SSH.WinUI.Models.Profiles
+namespace TripleG3.SSH.WinUI.Models.Profiles;
+
+public interface IProfilesService
 {
-    public interface IProfilesService
-    {
-        ProfilesState State { get; }
+    ProfilesState State { get; }
 
-        event Action<ProfilesState> StateChanged;
+    event Action<ProfilesState> StateChanged;
 
-        ValueTask DeleteAllProfiles();
-        ValueTask LoadProfiles();
-    }
+    ValueTask DeleteAllProfiles();
+    ValueTask LoadProfiles();
 }

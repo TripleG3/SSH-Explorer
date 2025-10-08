@@ -3,12 +3,11 @@ using System;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Windows.Storage;
 
 namespace TripleG3.SSH.WinUI.Models.Profiles;
 
 [Singleton<IProfilesService>]
-public sealed class ProfilesService : IProfilesService
+public sealed class ProfilesService(IProfileStorage storage) : IProfilesService
 {
     public event Action<ProfilesState> StateChanged = delegate { };
     private ProfilesState state = ProfilesState.Empty;
@@ -29,34 +28,44 @@ public sealed class ProfilesService : IProfilesService
     public async ValueTask LoadProfiles()
     {
         State = State with { IsBusy = true };
-        var files = await ApplicationData.Current.LocalFolder.GetFilesAsync();
-        var profiles = ImmutableList.CreateBuilder<Profile>();
-        foreach (var file in files)
+        try
         {
-            if (file.FileType.Equals($".{ProfileConstants.ProfileExtension}", StringComparison.OrdinalIgnoreCase))
+            var files = await storage.EnumerateAsync($".{ProfileConstants.ProfileExtension}");
+            var profiles = ImmutableList.CreateBuilder<Profile>();
+            foreach (var file in files)
             {
-                var json = await FileIO.ReadTextAsync(file);
+                var json = await storage.ReadAsync(file);
                 var profile = JsonSerializer.Deserialize<Profile>(json);
                 if (profile != null)
                 {
                     profiles.Add(profile);
                 }
             }
+            // Emit final state with IsBusy=false; finally will attempt to set busy=false again but it will be a no-op
+            State = new ProfilesState(profiles.ToImmutable(), false);
         }
-        State = new ProfilesState(profiles.ToImmutable(), false);
+        finally
+        {
+            State = State with { IsBusy = false };
+        }
     }
 
     public async ValueTask DeleteAllProfiles()
     {
         State = State with { IsBusy = true };
-        var files = await ApplicationData.Current.LocalFolder.GetFilesAsync();
-        foreach (var file in files)
+        try
         {
-            if (file.FileType.Equals($".{ProfileConstants.ProfileExtension}", StringComparison.OrdinalIgnoreCase))
+            var files = await storage.EnumerateAsync($".{ProfileConstants.ProfileExtension}");
+            foreach (var file in files)
             {
-                await file.DeleteAsync();
+                await storage.DeleteAsync(file);
             }
+            // Emit final state with IsBusy=false; finally will ensure busy is false even on failure
+            State = new ProfilesState([], false);
         }
-        State = new ProfilesState([], false);
+        finally
+        {
+            State = State with { IsBusy = false };
+        }
     }
 }

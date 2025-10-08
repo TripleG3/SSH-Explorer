@@ -64,7 +64,4 @@ public static class SshCommands
         foreach (var (k, v) in items) dict[k] = v;
         return dict;
     }
-
-    private static T GetOrDefault<T>(this IReadOnlyDictionary<string, object?> args, string key, T @default = default!)
-        => args.TryGetValue(key, out var v) && v is T t ? t : @default;
 }

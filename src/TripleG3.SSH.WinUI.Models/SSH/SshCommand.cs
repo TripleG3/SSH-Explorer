@@ -4,7 +4,6 @@ using System.Text;
 
 namespace TripleG3.SSH.WinUI.Models.SSH;
 
-// Represents a typed SSH command that can render to a shell-safe string
 public sealed record SshCommand(SshCommandKind Kind, IReadOnlyDictionary<string, object?> Args)
 {
     public string Build()

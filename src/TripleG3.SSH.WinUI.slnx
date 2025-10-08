@@ -4,6 +4,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="../tests/TripleG3.SSH.Models.Tests/TripleG3.SSH.WinUI.Models.Tests.csproj" Id="45c8c324-fd01-4584-85e8-3584544d03fc" />
   <Project Path="TripleG3.SSH.WinUI.Models/TripleG3.SSH.WinUI.Models.csproj" />
   <Project Path="TripleG3.SSH.WinUI.ViewModels/TripleG3.SSH.WinUI.ViewModels.csproj" />
   <Project Path="TripleG3.SSH.WinUI.Views/TripleG3.SSH.WinUI.Views.csproj" />

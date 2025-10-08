@@ -1,6 +1,7 @@
 ﻿using Specky7;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -10,6 +11,7 @@ using System.Threading.Tasks;
 namespace TripleG3.SSH.WinUI.Models.SSH;
 
 [Singleton<ISshHistoryStore>]
+[ExcludeFromCodeCoverage(Justification = "OS specific implementation")]
 public sealed class FileSshHistoryStore : ISshHistoryStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
